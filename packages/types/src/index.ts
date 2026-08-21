@@ -79,3 +79,136 @@ export interface FeatureFlag {
   enabled: boolean;
   description: string | null;
 }
+
+// ---------------------------------------------------------------------
+// Phase 2 — Agent OS Kernel / Event Bus / Memory / Permission
+// ---------------------------------------------------------------------
+
+export type AgentState =
+  | "IDLE"
+  | "THINKING"
+  | "RESEARCHING"
+  | "PLANNING"
+  | "WAITING_FOR_USER"
+  | "WAITING_FOR_APPROVAL"
+  | "PREPARING"
+  | "EXECUTING"
+  | "VERIFYING"
+  | "CHECKPOINTING"
+  | "RESUMING"
+  | "LEARNING"
+  | "FAILED"
+  | "PAUSED"
+  | "STOPPED"
+  | "BLOCKED"
+  | "COMPLETED";
+
+export interface RunCost {
+  toolCalls: number;
+  estimatedUsd?: number;
+}
+
+export interface AgentRun {
+  runId: string;
+  parentRunId: string | null;
+  agentId: string;
+  deviceId: string | null;
+  goal: string;
+  context: Record<string, unknown>;
+  toolsUsed: string[];
+  permissions: PermissionScope[];
+  status: AgentState;
+  startTime: string;
+  endTime: string | null;
+  result: unknown;
+  errors: string[];
+  cost: RunCost;
+  checkpointId: string | null;
+}
+
+export interface KernelEvent {
+  eventId: string;
+  eventType: string;
+  timestamp: string;
+  source: string;
+  agentId: string | null;
+  deviceId: string | null;
+  correlationId: string;
+  causationId: string | null;
+  schemaVersion: number;
+  payload: Record<string, unknown>;
+}
+
+export type MemoryType =
+  | "USER_PREFERENCE"
+  | "PROJECT_FACT"
+  | "PROJECT_EVENT"
+  | "TASK_HISTORY"
+  | "WORKFLOW"
+  | "WORKFLOW_VERSION"
+  | "FAILURE_RESOLUTION"
+  | "DECISION"
+  | "CHECKPOINT_HISTORY"
+  | "PROJECT_CHANGE"
+  | "PERSONAL_STRATEGY"
+  | "ACTIVITY_PATTERN"
+  | "SUCCESS_PATTERN"
+  | "FAILURE_PATTERN"
+  | "RESEARCH_FACT"
+  | "DECISION_HISTORY";
+
+export type MemoryLifecycle =
+  | "NEW"
+  | "CONFIRMED"
+  | "VERIFIED"
+  | "STALE"
+  | "CORRECTED"
+  | "ARCHIVED";
+
+export interface MemoryCorrection {
+  correctedAt: string;
+  previousContent: unknown;
+  reason: string;
+}
+
+export interface MemoryEntry {
+  memoryId: string;
+  agentId: string;
+  type: MemoryType;
+  content: unknown;
+  source: string;
+  confidence: number; // 0..1
+  lifecycle: MemoryLifecycle;
+  correctionHistory: MemoryCorrection[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ToolRisk = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export interface RetryPolicy {
+  maxRetries: number;
+  backoffMs: number;
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  outputSchema: Record<string, unknown>;
+  permission: PermissionScope;
+  risk: ToolRisk;
+  supportedDevices: DeviceType[];
+  timeoutMs: number;
+  retryPolicy: RetryPolicy;
+  auditEvent: boolean;
+  requiresApproval: boolean;
+}
+
+export interface RunLimitConfig {
+  maxSteps: number;
+  maxRuntimeMs: number;
+  maxToolCalls: number;
+  maxRetries: number;
+  maxCostUsd?: number;
+}
