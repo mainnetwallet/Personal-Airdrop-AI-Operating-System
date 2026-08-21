@@ -1,0 +1,6 @@
+{
+  "name": "@airdrop-os/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": { "dev": "echo 'Next.js app scaffold - UI build starts Phase 6+ per phase plan' " }
+}

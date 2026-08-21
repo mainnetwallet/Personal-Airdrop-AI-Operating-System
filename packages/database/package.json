@@ -1,0 +1,20 @@
+{
+  "name": "@airdrop-os/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "drizzle-orm": "^0.33.0",
+    "postgres": "^3.4.4"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.24.2"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "db:migrate": "tsx src/migrate.ts"
+  }
+}
