@@ -1,8 +1,12 @@
 /**
- * Phase 1 placeholder. The Agent OS Kernel (state machine, event bus,
- * memory, tool registry, permission enforcement) is built in Phase 2
- * and will live in this package. Intentionally NOT_CONFIGURED here so
- * Phase 2 has a clean, unused package to build into rather than
- * reworking Phase 1 code.
+ * Phase 2: Agent OS Kernel — state machine, event bus, memory,
+ * tool registry, permission enforcement, run limits.
  */
-export const KERNEL_STATUS = "NOT_CONFIGURED" as const;
+export const KERNEL_STATUS = "IMPLEMENTED" as const;
+
+export * from "./kernelState.js";
+export * from "./runLimits.js";
+export * from "./eventBus.js";
+export * from "./memory.js";
+export * from "./toolRegistry.js";
+export * from "./kernel.js";
