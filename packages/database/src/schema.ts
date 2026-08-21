@@ -148,115 +148,36 @@ export const policies = pgTable("policies", {
   keyIdx: uniqueIndex("policies_key_idx").on(t.key),
 }));
 
-// Phase 2 (Agent OS Kernel): full agent run record. Every field here is
-// mirrored by the in-memory AgentRun type/state machine in
-// @airdrop-os/core; this table is the durable record of the same data.
+// Foundation-level stub. Phase 2 (Agent OS Kernel) owns the full state
+// machine (IDLE/THINKING/.../COMPLETED) and step/runtime/budget limits.
 export const agentRuns = pgTable("agent_runs", {
   id: uuid("id").primaryKey().defaultRandom(),
   parentRunId: uuid("parent_run_id"),
   agentId: uuid("agent_id").notNull().references(() => agentIdentities.id, { onDelete: "cascade" }),
   deviceId: uuid("device_id").references(() => devices.id),
   goal: text("goal").notNull(),
-  context: jsonb("context").notNull().default({}),
-  toolsUsed: jsonb("tools_used").notNull().default([]),
-  permissions: jsonb("permissions").notNull().default([]),
   status: text("status").notNull().default("IDLE"),
   startTime: timestamp("start_time", { withTimezone: true }).notNull().defaultNow(),
   endTime: timestamp("end_time", { withTimezone: true }),
   result: jsonb("result"),
-  errors: jsonb("errors").notNull().default([]),
-  cost: jsonb("cost").notNull().default({ toolCalls: 0 }),
-  checkpointId: uuid("checkpoint_id"),
+  cost: jsonb("cost"),
 }, (t) => ({
   agentIdx: index("agent_runs_agent_idx").on(t.agentId),
-  parentIdx: index("agent_runs_parent_idx").on(t.parentRunId),
 }));
 
-// Phase 2: full kernel event bus contract, including the
-// correlationId/causationId/schemaVersion fields the in-memory
-// KernelEventBus (@airdrop-os/core) uses to reconstruct causal chains.
+// Foundation-level stub. Phase 2 owns the full event bus contract
+// (correlationId/causationId/schemaVersion).
 export const events = pgTable("events", {
   id: uuid("id").primaryKey().defaultRandom(),
   eventType: text("event_type").notNull(),
   source: text("source").notNull(),
   agentId: uuid("agent_id").references(() => agentIdentities.id),
   deviceId: uuid("device_id").references(() => devices.id),
-  correlationId: uuid("correlation_id").notNull(),
-  causationId: uuid("causation_id"),
-  schemaVersion: text("schema_version").notNull().default("1"),
   payload: jsonb("payload").notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   typeIdx: index("events_type_idx").on(t.eventType),
-  correlationIdx: index("events_correlation_idx").on(t.correlationId),
 }));
-
-export const memoryTypeEnum = pgEnum("memory_type", [
-  "USER_PREFERENCE",
-  "PROJECT_FACT",
-  "PROJECT_EVENT",
-  "TASK_HISTORY",
-  "WORKFLOW",
-  "WORKFLOW_VERSION",
-  "FAILURE_RESOLUTION",
-  "DECISION",
-  "CHECKPOINT_HISTORY",
-  "PROJECT_CHANGE",
-  "PERSONAL_STRATEGY",
-  "ACTIVITY_PATTERN",
-  "SUCCESS_PATTERN",
-  "FAILURE_PATTERN",
-  "RESEARCH_FACT",
-  "DECISION_HISTORY",
-]);
-
-export const memoryLifecycleEnum = pgEnum("memory_lifecycle", [
-  "NEW",
-  "CONFIRMED",
-  "VERIFIED",
-  "STALE",
-  "CORRECTED",
-  "ARCHIVED",
-]);
-
-// Phase 2: durable memory record. `content` never stores secrets - the
-// application layer always passes writes through redactSecrets() first
-// (see @airdrop-os/core MemoryStore), this table has no column that is
-// exempt from that rule. `correctionHistory` preserves every prior
-// version of `content` rather than overwriting it.
-export const memoryEntries = pgTable("memory_entries", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  agentId: uuid("agent_id").notNull().references(() => agentIdentities.id, { onDelete: "cascade" }),
-  type: memoryTypeEnum("type").notNull(),
-  content: jsonb("content").notNull(),
-  source: text("source").notNull(),
-  confidence: text("confidence").notNull(), // decimal 0..1, stored as text to avoid float rounding
-  lifecycle: memoryLifecycleEnum("lifecycle").notNull().default("NEW"),
-  correctionHistory: jsonb("correction_history").notNull().default([]),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  agentIdx: index("memory_entries_agent_idx").on(t.agentId),
-  typeIdx: index("memory_entries_type_idx").on(t.type),
-}));
-
-// Phase 2: catalog of tools available to the kernel and the permission/
-// risk/device metadata every tool call is checked against (see
-// @airdrop-os/core ToolRegistry). This table is descriptive - the
-// authoritative enforcement logic lives in code, not in a DB constraint.
-export const toolRegistry = pgTable("tool_registry", {
-  name: text("name").primaryKey(),
-  description: text("description").notNull(),
-  inputSchema: jsonb("input_schema").notNull().default({}),
-  outputSchema: jsonb("output_schema").notNull().default({}),
-  permission: text("permission").notNull(),
-  risk: text("risk").notNull(),
-  supportedDevices: jsonb("supported_devices").notNull().default([]),
-  timeoutMs: text("timeout_ms").notNull(),
-  retryPolicy: jsonb("retry_policy").notNull().default({ maxRetries: 0, backoffMs: 0 }),
-  auditEvent: boolean("audit_event").notNull().default(true),
-  requiresApproval: boolean("requires_approval").notNull().default(false),
-});
 
 // Audit logs are append-only from the application's perspective: no
 // update/delete path is exposed anywhere in the API.
