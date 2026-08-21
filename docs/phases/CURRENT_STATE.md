@@ -27,10 +27,10 @@ full detail.
 - Typecheck clean across all 9 packages/apps; 67 tests passing repo-wide
 
 ## Partial / mocked / not-configured
-- `/auth/*` and `/devices/*` routes are implemented but **not yet run
-  against a live Postgres/Redis** — no DB engine available in this
-  sandbox. Needs verification on a machine with Docker before trusting
-  in production.
+- `/auth/*` routes have now been exercised against a real local
+  Postgres/Redis (see Known bugs / security issues) — `/devices/*` has
+  **not** yet been run against a live DB and should be verified the
+  same way before trusting it in production.
 - `apps/web`, `apps/local-agent`, `apps/extension`, `apps/android`:
   NOT_CONFIGURED, workspace placeholders only
 - `packages/core` (Agent OS Kernel): **in-memory only** — no repository
@@ -45,9 +45,53 @@ full detail.
   tuning yet
 
 ## Known bugs / security issues
-None found in what was built. Caveats:
-- Integration-level behavior (real DB constraints, concurrent refresh
-  races, kernel-to-DB persistence races) is unverified in this sandbox.
+Two bugs were found and fixed via **live-DB verification** of
+`/auth/register` and `/auth/login` against a real Postgres instance —
+neither was caught by the original Phase 1 unit-test-only verification,
+because both are about actual transactional/constraint behavior that a
+mocked db object cannot exercise.
+
+1. **`/auth/register` had no transaction.** The handler did sequential,
+   unwrapped inserts: `users` → `agent_identities` → `devices` →
+   `device_permissions`. A failure at any step after the first left an
+   orphaned `users` row with no agent identity — the account was then
+   permanently unrecoverable: login failed (`500 agent identity missing
+   for user`) and re-registration failed (`409 account already exists`),
+   with no path out. Reproduced live: registering a second real user
+   failed (see bug 2) and left exactly that orphaned row, confirmed via
+   `psql`. **Fixed** by wrapping the full handler body in
+   `db.transaction(async (tx) => { ... })` so any failure rolls back
+   everything atomically.
+2. **`formatAgentLabel(1)` was hardcoded.** Every registration passed
+   the literal `1` instead of a real per-agent sequence number.
+   `agent_identities_label_idx` is a unique index on `label`, so the
+   *second* real user to register always hit `500 duplicate key value
+   violates unique constraint "agent_identities_label_idx"`. Reproduced
+   live: user A registered fine (`AIRDROP-USER-001`), user B's
+   registration 500'd. **Fixed** by adding a Postgres sequence
+   (`agent_label_seq`, migration `0002_majestic_red_ghost.sql`) and
+   deriving the label from `nextval('agent_label_seq')` inside the same
+   transaction as fix 1 — atomic and race-safe under concurrent
+   registrations, without changing the `AIRDROP-USER-NNN` format (kept
+   because `packages/identity/src/__tests__/agentIdentity.test.ts`
+   asserts that exact format).
+
+Also fixed as part of the same live-DB pass: a malformed/missing
+`device` object on `/auth/register` or `/auth/login` (e.g. missing
+`name`/`platform`/`version`, or an invalid `type`) previously fell
+through to the DB layer and surfaced as a raw `500` with a Postgres
+constraint name leaked in the response body. Added `validateDevice()`
+input validation so this now fails fast with a clean `400`.
+
+Regression tests: `apps/api/src/__tests__/auth.register.test.ts` (runs
+against a real Postgres test database, not mocked) covers distinct
+agent labels across two sequential registrations, that a forced
+mid-transaction failure leaves no orphaned `users` row, and that a
+malformed `device` object returns `400`.
+
+Caveats still open:
+- Concurrent-refresh races and kernel-to-DB persistence races remain
+  unverified.
 - Phase 2 was previously built once already (commit `f7db4b2`) and
   reverted (`df172d1`) with no reason recorded in that revert's commit
   message. This phase was rebuilt from scratch rather than restoring
@@ -60,8 +104,13 @@ None found in what was built. Caveats:
 - `packages/database/drizzle/0001_mixed_sister_grimm.sql` — Phase 2:
   `memory_entries`, `tool_registry` tables + `agent_runs`/`events`
   column additions
+- `packages/database/drizzle/0002_majestic_red_ghost.sql` — adds
+  `agent_label_seq`, a Postgres sequence backing the numeric suffix of
+  `agent_identities.label` (see Known bugs / security issues, bug 2)
 
-Neither migration has been applied to a live database in this sandbox.
+All three migrations have been applied and exercised against a real
+local Postgres instance as part of the live-DB bug-fix pass described
+above.
 
 ## API routes
 `GET /health`, `GET /readiness`, `POST /auth/register`,

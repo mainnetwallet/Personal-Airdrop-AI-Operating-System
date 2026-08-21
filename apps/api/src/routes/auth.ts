@@ -1,16 +1,47 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { schema } from "@airdrop-os/database";
 import { hashSecret, verifySecret, issueTokenPair, verifyRefreshToken } from "@airdrop-os/security";
 import { buildNewDeviceRecord } from "@airdrop-os/identity";
 import { formatAgentLabel } from "@airdrop-os/identity";
 import { recordAudit } from "../audit.js";
 
+const DEVICE_TYPES = ["VPS", "PC", "ANDROID", "WEB", "CHROME_EXTENSION"] as const;
+type DeviceType = (typeof DEVICE_TYPES)[number];
+
 interface RegisterBody {
   email: string;
   password: string;
   device: { type: "VPS" | "PC" | "ANDROID" | "WEB" | "CHROME_EXTENSION"; name: string; platform: string; version: string };
+}
+
+/**
+ * Validates the `device` object on register/login bodies. Fastify's type
+ * generics only guide TypeScript at compile time - they do nothing to
+ * reject a malformed JSON body at runtime, so without this a missing or
+ * wrong-typed field (e.g. no `device` at all, or `device.type` not in
+ * the enum) sails through to the DB layer and surfaces as a raw 500 with
+ * a leaked constraint/column name instead of a clean 400.
+ */
+function validateDevice(device: unknown): string | null {
+  if (typeof device !== "object" || device === null) {
+    return "device is required";
+  }
+  const d = device as Record<string, unknown>;
+  if (typeof d.type !== "string" || !DEVICE_TYPES.includes(d.type as DeviceType)) {
+    return `device.type is required and must be one of: ${DEVICE_TYPES.join(", ")}`;
+  }
+  if (typeof d.name !== "string" || d.name.trim().length === 0) {
+    return "device.name is required";
+  }
+  if (typeof d.platform !== "string" || d.platform.trim().length === 0) {
+    return "device.platform is required";
+  }
+  if (typeof d.version !== "string" || d.version.trim().length === 0) {
+    return "device.version is required";
+  }
+  return null;
 }
 
 interface LoginBody {
@@ -37,6 +68,12 @@ export async function authRoutes(app: FastifyInstance) {
       return { error: "email and a password of at least 12 characters are required" };
     }
 
+    const deviceError = validateDevice(device);
+    if (deviceError) {
+      reply.code(400);
+      return { error: deviceError };
+    }
+
     const existing = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
     if (existing) {
       reply.code(409);
@@ -44,46 +81,74 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const passwordHash = await hashSecret(password);
-    const [user] = await db.insert(schema.users).values({ email, passwordHash }).returning();
 
-    // One persistent agent identity per user, independent of device.
-    const label = formatAgentLabel(1);
-    const [agent] = await db
-      .insert(schema.agentIdentities)
-      .values({ userId: user.id, label })
-      .returning();
+    // The whole registration (user -> agent identity -> device -> device
+    // permissions) runs as a single DB transaction. Previously these were
+    // sequential, unwrapped inserts: a failure partway through (e.g. the
+    // duplicate-label bug below, or a bad device payload) left an
+    // orphaned user row with no agent identity and no way to log in or
+    // re-register. Wrapping in db.transaction means any failure at any
+    // step rolls back everything atomically - either the full account
+    // exists or none of it does.
+    const result = await db.transaction(async (tx) => {
+      const [user] = await tx.insert(schema.users).values({ email, passwordHash }).returning();
 
-    const deviceRecord = buildNewDeviceRecord({ agentId: agent.id, ...device });
-    const [createdDevice] = await db
-      .insert(schema.devices)
-      .values({
-        agentId: agent.id,
-        type: deviceRecord.type,
-        name: deviceRecord.name,
-        platform: deviceRecord.platform,
-        version: deviceRecord.version,
-        status: deviceRecord.status,
-      })
-      .returning();
+      // One persistent agent identity per user, independent of device.
+      // The numeric suffix comes from a DB sequence (nextval), not a
+      // hardcoded literal or a COUNT(*) read - a sequence is atomic and
+      // race-safe under concurrent registrations, so two users can never
+      // be assigned the same label (agent_identities_label_idx is a
+      // unique index) even if their transactions overlap.
+      const [{ nextval }] = await tx.execute<{ nextval: string }>(
+        sql`select nextval('agent_label_seq') as nextval`,
+      );
+      const label = formatAgentLabel(Number(nextval));
+      const [agent] = await tx
+        .insert(schema.agentIdentities)
+        .values({ userId: user.id, label })
+        .returning();
 
-    for (const scope of deviceRecord.permissions) {
-      await db.insert(schema.devicePermissions).values({ deviceId: createdDevice.id, scope });
-    }
+      const deviceRecord = buildNewDeviceRecord({ agentId: agent.id, ...device });
+      const [createdDevice] = await tx
+        .insert(schema.devices)
+        .values({
+          agentId: agent.id,
+          type: deviceRecord.type,
+          name: deviceRecord.name,
+          platform: deviceRecord.platform,
+          version: deviceRecord.version,
+          status: deviceRecord.status,
+        })
+        .returning();
 
-    await recordAudit(db, {
-      actorType: "USER",
-      actorId: user.id,
-      action: "user.register",
-      targetType: "device",
-      targetId: createdDevice.id,
+      for (const scope of deviceRecord.permissions) {
+        await tx.insert(schema.devicePermissions).values({ deviceId: createdDevice.id, scope });
+      }
+
+      await recordAudit(tx, {
+        actorType: "USER",
+        actorId: user.id,
+        action: "user.register",
+        targetType: "device",
+        targetId: createdDevice.id,
+      });
+
+      return { user, agent, createdDevice };
     });
 
+    const { user, agent, createdDevice } = result;
     reply.code(201);
     return { userId: user.id, agentId: agent.id, agentLabel: agent.label, deviceId: createdDevice.id, deviceStatus: createdDevice.status };
   });
 
   app.post<{ Body: LoginBody }>("/auth/login", async (req, reply) => {
     const { email, password, device } = req.body;
+    const deviceError = validateDevice(device);
+    if (deviceError) {
+      reply.code(400);
+      return { error: deviceError };
+    }
+
     const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
     if (!user || !(await verifySecret(user.passwordHash, password))) {
       reply.code(401);

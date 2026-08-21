@@ -26,7 +26,19 @@ import {
   index,
   uniqueIndex,
   pgEnum,
+  pgSequence,
 } from "drizzle-orm/pg-core";
+
+// Backs the numeric part of agent_identities.label (AIRDROP-USER-NNN).
+// A DB sequence guarantees globally-unique, race-safe numbering even
+// under concurrent registrations - a plain "COUNT(*) + 1" read-then-write
+// would let two simultaneous registrations compute the same number and
+// collide on agent_identities_label_idx.
+export const agentLabelSeq = pgSequence("agent_label_seq", {
+  startWith: 1,
+  minValue: 1,
+  increment: 1,
+});
 
 export const deviceTypeEnum = pgEnum("device_type", [
   "VPS",
