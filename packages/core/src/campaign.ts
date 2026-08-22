@@ -81,4 +81,10 @@ export class CampaignStore {
   listForProject(projectId: string): Campaign[] {
     return [...this.campaigns.values()].filter((c) => c.projectId === projectId);
   }
+
+  /** All campaigns across all projects, for cross-store consumers like GlobalSearchIndex sync. */
+  listAll(): Campaign[] {
+    return [...this.campaigns.values()];
+  }
+
 }

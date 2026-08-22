@@ -124,4 +124,10 @@ export class MissionStore {
   forProject(projectId: string): Mission[] {
     return [...this.missions.values()].filter((m) => m.projectId === projectId);
   }
+
+  /** All missions across all projects, for cross-store consumers like GlobalSearchIndex sync. */
+  listAll(): Mission[] {
+    return [...this.missions.values()];
+  }
+
 }

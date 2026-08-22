@@ -67,4 +67,9 @@ export class WalletStore {
   listByLabel(label: WalletLabel): Wallet[] {
     return [...this.wallets.values()].filter((w) => w.label === label);
   }
+
+  /** All registered wallets, for cross-store consumers like GlobalSearchIndex sync. */
+  listAll(): Wallet[] {
+    return [...this.wallets.values()];
+  }
 }

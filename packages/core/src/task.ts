@@ -77,6 +77,11 @@ export class TaskGraph {
     return [...this.tasks.values()].filter((t) => t.missionId === missionId);
   }
 
+  /** All tasks across all missions, for cross-store consumers like GlobalSearchIndex sync. */
+  listAll(): Task[] {
+    return [...this.tasks.values()];
+  }
+
   setStatus(taskId: string, status: TaskStatus): Task {
     const task = this.get(taskId);
     task.status = status;

@@ -160,3 +160,4 @@ export * from "./shadowAgent.js";
 export * from "./season.js";
 export * from "./globalSearch.js";
 export * from "./auditReplay.js";
+export * from "./searchIndexers.js";

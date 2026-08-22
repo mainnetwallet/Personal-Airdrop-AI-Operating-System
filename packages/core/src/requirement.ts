@@ -173,4 +173,9 @@ export class RequirementStore {
       .map((h) => h[h.length - 1])
       .filter((r) => r.projectId === projectId);
   }
+
+  /** Latest version of every requirement on record, for cross-store consumers like GlobalSearchIndex sync. */
+  listAllCurrent(): Requirement[] {
+    return [...this.versions.values()].map((h) => h[h.length - 1]);
+  }
 }
