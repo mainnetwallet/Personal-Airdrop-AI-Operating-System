@@ -128,6 +128,9 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
+      '@next/swc-wasm-nodejs':
+        specifier: 14.2.33
+        version: 14.2.33
       '@types/node':
         specifier: ^20.14.0
         version: 20.19.43
@@ -949,6 +952,9 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [musl]
+
+  '@next/swc-wasm-nodejs@14.2.33':
+    resolution: {integrity: sha512-D7G8u60wm1odi2fmR4sW3NGfFbRLTspUamO05EqyzjR9wSlxnv1zANjUEtbhlEpiArN4zJrrG/Mf460OVWvgTg==}
 
   '@next/swc-win32-arm64-msvc@14.2.33':
     resolution: {integrity: sha512-nscpt0G6UCTkrT2ppnJnFsYbPDQwmum4GNXYTeoTIdsmMydSKFz9Iny2jpaRupTb+Wl298+Rh82WKzt9LCcqSQ==}
@@ -2875,6 +2881,8 @@ snapshots:
 
   '@next/swc-linux-x64-musl@14.2.33':
     optional: true
+
+  '@next/swc-wasm-nodejs@14.2.33': {}
 
   '@next/swc-win32-arm64-msvc@14.2.33':
     optional: true
