@@ -5,7 +5,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
-    "argon2": "^0.41.1",
+    "hash-wasm": "^4.11.0",
     "jsonwebtoken": "^9.0.2",
     "uuid": "^9.0.1",
     "@airdrop-os/types": "workspace:*"
