@@ -1621,3 +1621,70 @@ export interface ShadowAgentComparison {
   agree: boolean;
   comparedAt: string;
 }
+
+// Phase 12 — Season/Epoch as first-class entities (spec 48), Global
+// Search (224), Audit Replay (241).
+
+export type SeasonStatus = "UPCOMING" | "ACTIVE" | "ENDED";
+
+export interface Season {
+  seasonId: string;
+  campaignId: string;
+  name: string;
+  status: SeasonStatus;
+  startAt: string | null;
+  endAt: string | null;
+  pointsCap: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type EpochStatus = "UPCOMING" | "ACTIVE" | "SNAPSHOT_PENDING" | "SNAPSHOT_TAKEN" | "ENDED";
+
+export interface Epoch {
+  epochId: string;
+  seasonId: string;
+  index: number; // 1-based ordering within the season
+  status: EpochStatus;
+  startAt: string | null;
+  endAt: string | null;
+  snapshotBlock: number | null;
+  snapshotAt: string | null;
+  pointsAwarded: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SearchableRecord {
+  entityType: string;
+  entityId: string;
+  label: string;
+  // Additional free-text fields (description, tags, etc.) to match against.
+  searchableText: string;
+}
+
+export interface SearchResult {
+  entityType: string;
+  entityId: string;
+  label: string;
+  score: number; // higher = better match, not normalized across entityTypes
+}
+
+export interface AuditReplayEntry {
+  eventId: string;
+  eventType: string;
+  category: string;
+  timestamp: string;
+  source: string;
+  agentId: string | null;
+  deviceId: string | null;
+  summary: string;
+}
+
+export interface AuditReplayResult {
+  rangeStart: string;
+  rangeEnd: string;
+  totalEvents: number;
+  byCategory: Record<string, number>;
+  entries: AuditReplayEntry[];
+}

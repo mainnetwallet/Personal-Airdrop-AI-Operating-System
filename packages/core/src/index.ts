@@ -157,3 +157,6 @@ export * from "./multidevice/concurrency.js";
 export * from "./integrations/providerQuota.js";
 export * from "./knowledgeGraph.js";
 export * from "./shadowAgent.js";
+export * from "./season.js";
+export * from "./globalSearch.js";
+export * from "./auditReplay.js";

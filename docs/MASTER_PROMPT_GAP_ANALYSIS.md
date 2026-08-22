@@ -1,5 +1,10 @@
 # Gap Analysis — Repository vs. the 325-Section Master Build Prompt
 
+> **Update (Phase 12):** three more gaps closed this session — see
+> "What Phase 12 added" below. This section list still reflects the
+> state after Phase 11 for historical context; the "Confirmed gaps"
+> section further down has been updated to remove what Phase 12 closed.
+
 This compares what actually exists in
 `mainnetwallet/Personal-Airdrop-AI-Operating-System` against the full
 "PERSONAL AIRDROP AI OPERATING SYSTEM V12 — ULTIMATE FINAL MASTER
@@ -28,6 +33,42 @@ passing, 0 typecheck errors, verified against real Postgres 16 + Redis
 7 (see `docs/FINAL_STATUS.md` for the Phase 10 verification run this
 built on).
 
+## What Phase 12 added this session (real, tested)
+
+| Spec section | Module | Status |
+|---|---|---|
+| 48 Season/Epoch Engine (first-class entities) | `season.ts` (`SeasonStore`) | Implemented, 13 tests |
+| 224 Global Search | `globalSearch.ts` (`GlobalSearchIndex`) | Implemented, 9 tests |
+| 241 Audit Replay | `auditReplay.ts` (`replay`, `replayYesterday`) | Implemented, 6 tests |
+
+Notes on scope/design honesty:
+- `season.ts` is additive to, not a replacement for, `campaign.ts`'s
+  existing `CampaignPhase` timeline (which still records SEASON/EPOCH
+  as phase transitions). A caller that wants both a timeline entry and
+  a queryable Season/Epoch record must write to both — this module
+  does not auto-derive one from the other, since campaign.ts's own
+  header comment explains timeline events are unordered/observational
+  and shouldn't be silently promoted into structured entities without
+  a decision to do so.
+- `globalSearch.ts` is a standalone index that other stores must push
+  records into (`upsert`/`remove`) as their entities change; it does
+  not reach into ProjectStore/TaskStore/etc. itself. No store currently
+  calls it, so as of this commit it is wired and tested but not yet
+  populated by production code paths — that wiring is the next step,
+  not done here, and is listed below rather than silently assumed.
+- `auditReplay.ts` reads whatever is in a `KernelEventBus`'s in-memory
+  log (or, once durable, the `events` table). It categorizes by
+  eventType prefix matching spec 241's list and falls back to "Other"
+  for anything unrecognized, so replay coverage is always complete —
+  it never drops an event because it didn't match a known category.
+
+All three exported from `@airdrop-os/core`. Full core suite: 426/426
+tests passing (68 test files), 0 typecheck errors across all 13
+workspace projects. `apps/api`'s `auth.register.test.ts` (3 tests)
+still requires a live Postgres connection not available in this
+sandbox — same documented limitation as Phase 10/11, unrelated to this
+session's changes (verified: that file was not touched).
+
 ## What was already implemented (Phases 1-10, confirmed by inspection)
 
 Kernel/state machine/event bus/tool registry/run limits, project/
@@ -53,23 +94,19 @@ everything else in `packages/core` is in-memory (flagged since Phase
 Grep-verified absent from `packages/core`, `packages/types`, and
 `apps/*/src` as of this session:
 
-- **Season/Epoch as first-class entities with their own points/
-  snapshot/deadline tracking** (section 48) — currently folded into
-  `CampaignPhase` in `campaign.ts`, a simpler design than the spec's
-  dedicated engine.
 - **Model Router** (199) and **Model Cost Controller** (200) — no
   model-selection-by-task-complexity logic exists; nothing currently
   calls an LLM from this codebase to route.
-- **Global Search** (224), **Command Center** (221) and **Command
-  Palette** (222) as backend query surfaces — no cross-entity search
-  endpoint exists (the new `knowledgeGraph.ts` provides primitives
-  this could be built on, but the search API itself is not built).
+- **Command Center** (221) and **Command Palette** (222) as backend
+  aggregation endpoints — `globalSearch.ts` (Phase 12) now provides the
+  cross-entity search primitive, and `auditReplay.ts` (Phase 12)
+  provides the "what happened" primitive, but no store yet pushes
+  records into `GlobalSearchIndex` (no ProjectStore/TaskStore/etc.
+  calls `.upsert()` on create/update), and no single "morning
+  dashboard" endpoint aggregates urgent items/claims/budget/paused
+  workflows into one response per section 221's list.
 - **Calendar engine** (235) — no deadline/reset/claim-window
   aggregation view exists.
-- **Audit Replay** (241) as a user-facing "what did the agent do
-  yesterday" query — `events`/`audit_logs` tables and `eventBus.ts`
-  exist as the substrate, but no replay/summarization query is built
-  on top of them.
 - **Referral Integrity (86), Ambassador/Creator Engine (78), Waitlist/
   Beta/Early-Access Engine (80), Learn-to-Earn Engine (81), CEX/
   Exchange Campaign Engine (79)** — no dedicated adapters; only
@@ -122,12 +159,18 @@ SDK, no live VPS, no browser runtime — see `docs/FINAL_STATUS.md`).
    single largest open item since Phase 3/9/10) — most of the gaps
    above are meaningless to build against in-memory Maps that reset on
    every process restart.
-2. Season/Epoch as first-class entities (48) if points/snapshot
-   tracking per-season becomes a real requirement — currently a
-   deliberate simplification, not an oversight.
+2. Wire `GlobalSearchIndex.upsert()` into ProjectStore/CampaignStore/
+   TaskStore/MissionStore/WalletStore's create/update paths so Phase
+   12's search index actually reflects live data instead of sitting
+   unpopulated — this is now the single largest "just needs wiring"
+   item.
 3. Real Discord/social/quest platform credentials, once available, to
    move Phase 8 adapters from interface-only to CONNECTED.
-4. A backend query layer over the new `KnowledgeGraph`/`eventBus` to
-   deliver Global Search (224) and Audit Replay (241) — these are the
-   two user-facing features closest to "just needs wiring" given what
-   already exists.
+4. An API route exposing `auditReplay.replay()`/`replayYesterday()`
+   and `GlobalSearchIndex.search()` so Global Search (224) and Audit
+   Replay (241) are reachable from `apps/web`/`apps/android`, not just
+   from `@airdrop-os/core` internally.
+5. Decide whether `SeasonStore` (Phase 12) should be the source of
+   truth `CampaignStore.recordPhase()` writes through for SEASON/EPOCH
+   phases, or remain a parallel structured index — currently they can
+   drift independently since nothing links them.
