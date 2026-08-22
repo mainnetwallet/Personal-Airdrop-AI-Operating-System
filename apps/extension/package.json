@@ -1,5 +1,21 @@
 {
   "name": "@airdrop-os/extension",
   "version": "0.1.0",
-  "private": true
+  "private": true,
+  "main": "src/background.ts",
+  "dependencies": {
+    "@airdrop-os/core": "workspace:*",
+    "@airdrop-os/types": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.269",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
 }

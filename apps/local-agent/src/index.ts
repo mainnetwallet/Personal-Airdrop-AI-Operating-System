@@ -3,9 +3,8 @@ import {
   PcAgentAuthorizer,
   BrowserSessionManager,
   CheckpointManager,
-  type BrowserIsolationKey,
-  type BrowserMode,
 } from "@airdrop-os/core";
+import type { BrowserIsolationKey, BrowserMode } from "@airdrop-os/types";
 import { loadLocalAgentConfig } from "./config.js";
 
 /**

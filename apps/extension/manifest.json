@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Personal Airdrop AI OS",
+  "version": "0.1.0",
+  "description": "Project detection, task guidance, and workflow teaching for the Personal Airdrop AI Operating System.",
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [],
+  "action": {
+    "default_title": "Personal Airdrop AI OS"
+  }
+}
