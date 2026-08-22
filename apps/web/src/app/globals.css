@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+body {
+  background-color: #08090C;
+  color: #EEF0F4;
+}
+
+/* Visible keyboard focus everywhere - never suppressed */
+:focus-visible {
+  outline: 2px solid #3FD0C9;
+  outline-offset: 2px;
+}
+
+/* The state-rail signature motif: a thin horizontal strip of dots used
+   wherever the product shows a state machine's position (agent runs,
+   device trust, workflow status). This is a deliberate structural
+   device, not decoration - most of this backend IS state machines. */
+.state-rail {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.state-rail-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background-color: theme("colors.base.600");
+}
+.state-rail-dot[data-passed="true"] {
+  background-color: theme("colors.ink.500");
+}
+.state-rail-dot[data-current="true"] {
+  background-color: currentColor;
+  width: 7px;
+  height: 7px;
+}

@@ -52,12 +52,15 @@ persistence or the API:
 Phase 6's core logic (job auth, session isolation, checkpoints, safe
 event redaction, teach sessions) but NOT_CONFIGURED for live execution —
 no Playwright browser, no reachable VPS, no Chrome runtime in this
-sandbox. `apps/web` and `apps/android` are still empty scaffolds (the
-latter now documents its 18 required screens per Phase 9, but has no
-Android SDK/emulator/Gradle toolchain in this sandbox). Phase 7's
-transaction firewall, Phase 8's off-chain adapters, and Phase 9's
-multi-device/backup/migration modules are not yet wired into any app
-or into `apps/api` — see Next-phase dependencies. See
+sandbox. `apps/web` (added post-Phase-9, see "apps/web" below) is a
+real Next.js console wired to whatever `apps/api` actually exposes
+(auth + devices) with honest "not wired" placeholders for Phase 2-9's
+domain logic. `apps/android` is still an empty scaffold (it documents
+its 18 required screens per Phase 9, but has no Android SDK/emulator/
+Gradle toolchain in this sandbox). Phase 7's transaction firewall,
+Phase 8's off-chain adapters, and Phase 9's multi-device/backup/
+migration modules are not yet wired into any app or into `apps/api` —
+see Next-phase dependencies. See
 `docs/phases/PHASE-1.md` through `PHASE-9.md` for full detail.
 
 ## Completed / tested (this sandbox)
@@ -174,7 +177,22 @@ or into `apps/api` — see Next-phase dependencies. See
   a live DB. This sandbox has no Docker, so the 3 live-DB `auth`
   integration tests fail here with ECONNREFUSED — expected, not a
   regression
-- `apps/web`: NOT_CONFIGURED, empty workspace placeholder
+- `apps/web`: real Next.js 14 console (typechecked, `next build`
+  verified in this sandbox except Google Fonts optimization, which is
+  blocked by this sandbox's network allowlist and degrades gracefully
+  — not a code defect). Wires `/login`, `/register`,
+  `/dashboard` (readiness check), `/dashboard/devices` (real list +
+  trust-state transitions) to the actual `apps/api` routes. Device
+  transitions require an ADMIN-scoped session, which the backend never
+  auto-grants, so the console surfaces that as a real 403 rather than
+  hiding it. `/dashboard/system` is a documentation view transcribed
+  from this file, explicitly labeled as not live telemetry — there is
+  no API route reporting phase completion, and none was fabricated to
+  make the page look more complete than the backend actually is.
+  Phase 2-9's domain logic (agent runs, projects, eligibility, chain
+  activity, workflows, transaction firewall, off-chain adapters,
+  multi-device) has no API route yet, so the console shows explicit
+  "not wired" cards for those sections instead of mock data
 - `apps/local-agent`: real job-auth/session/checkpoint wiring, but
   `connectToVps()` and `launchBrowser()` are NOT_CONFIGURED — no
   reachable VPS and no permitted network path to Playwright's browser
