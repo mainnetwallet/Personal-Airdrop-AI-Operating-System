@@ -15,19 +15,9 @@ Phase 9 of 10 complete. See `docs/phases/CURRENT_STATE.md`.
 
 ## Getting started
 
-### Option A — Docker (PC/VPS with Docker available)
-```bash
-pnpm install
-cp .env.example .env   # fill in real secrets, never commit .env
-docker compose up -d   # postgres + redis
-pnpm --filter @airdrop-os/database db:migrate
-pnpm dev:api
-```
-
-### Option B — Native, no Docker (works on PC, VPS, or Android/Termux)
-Postgres and Redis run as native processes instead of containers — same
-DB/queue, no container runtime required. Useful when Docker isn't
-available (e.g. Termux on Android, or a minimal VPS).
+### Option A — Native, no Docker (works on PC, VPS, or Android/Termux)
+Postgres and Redis run as native processes — no container runtime
+required.
 
 ```bash
 # Debian/Ubuntu (PC or VPS)
@@ -53,7 +43,7 @@ pnpm --filter @airdrop-os/database db:migrate
 pnpm dev:api
 ```
 
-### Option C — Managed cloud DB (no local install anywhere)
+### Option B — Managed cloud DB (no local install anywhere)
 Use a free-tier hosted Postgres (e.g. Neon) and Redis (e.g. Upstash),
 then just set `DATABASE_URL` / `REDIS_URL` in `.env` to the provided
 connection strings. Same DB reachable from PC, VPS, and phone at once.
