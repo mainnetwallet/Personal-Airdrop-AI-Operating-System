@@ -389,4 +389,23 @@ multi-device sync so there is real data to sync.
    than deferring an eighth time — this would also give Phase 9's
    multi-device sync real data to synchronize.
 
-STOP after Phase 9 (per contract) - Phase 10 not started.
+## Phase 10
+Ran full verification with real Postgres 16 + Redis 7 installed and
+started in the build environment (not mocked). `pnpm -r typecheck`:
+0 errors. `pnpm -r test`: 390/390 passing across all 6 packages that
+have tests (config, identity, security, api, core, extension) — the
+3 previously-ECONNREFUSED `apps/api` auth tests now pass for real.
+`/health` and `/readiness` verified live: both `ok`, readiness
+confirms `database: ok` and `redis: ok`. Fixed
+`packages/core/src/multidevice/backup.ts`'s `defaultHash()`
+placeholder (32-bit rolling hash) → real SHA-256 via `node:crypto`;
+all 354 core tests and `backup.test.ts` still pass. No other bugs
+found. See `docs/phases/PHASE-10.md` and `docs/FINAL_STATUS.md` for
+the full report and verdict: **PRODUCTION BLOCKED** (persistence for
+`packages/core` domain stores still in-memory-only; backup encryption
+not implemented; RPC/explorer/Playwright/VPS/extension-runtime/
+Discord-X-Telegram-GitHub/Android integrations remain NOT_CONFIGURED
+with zero real-network integration testing — this sandbox has no
+network path to any of them).
+
+STOP after Phase 10 (per contract) - all 10 phases complete.

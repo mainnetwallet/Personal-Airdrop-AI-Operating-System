@@ -1,5 +1,5 @@
 import type { BackupManifest, DeviceKind } from "@airdrop-os/types";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 
 const SENSITIVE_KEY_PATTERN = /pass(word)?|seed|mnemonic|private[_ ]?key|secret|otp|2fa|recovery[_ ]?code|session[_ ]?token|api[_ ]?key/i;
 
@@ -32,14 +32,10 @@ export interface BackupInput {
 }
 
 function defaultHash(data: unknown): string {
-  // Deterministic content hash for integrity checking. Not cryptographic
-  // - a real deployment should inject a real hash function via hashFn.
+  // Real cryptographic content hash (SHA-256) for backup integrity checking.
+  // Callers may still inject a different hash function via hashFn.
   const json = JSON.stringify(data);
-  let h = 0;
-  for (let i = 0; i < json.length; i++) {
-    h = (Math.imul(31, h) + json.charCodeAt(i)) | 0;
-  }
-  return `h${(h >>> 0).toString(16)}`;
+  return `sha256:${createHash("sha256").update(json).digest("hex")}`;
 }
 
 export function buildBackupManifest(input: BackupInput, now?: number): { manifest: BackupManifest; payload: Partial<Record<BackupEntityType, unknown[]>> } {
