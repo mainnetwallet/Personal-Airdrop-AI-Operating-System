@@ -139,3 +139,21 @@ export * from "./multidevice/backup.js";
 export * from "./multidevice/restore.js";
 export * from "./multidevice/migration.js";
 export * from "./multidevice/disasterRecovery.js";
+
+/**
+ * Phase 11: Decision Journal, Notification Engine, Distributed Lock /
+ * Job Lease, Provider Quota, Knowledge Graph, Shadow Agent. Pure state
+ * management like every prior phase - the real cross-process lock/
+ * lease transport (Postgres advisory locks, Redis, etc.) is
+ * NOT_CONFIGURED; what's implemented and tested here is the ownership/
+ * expiration/escalation/comparison decision logic any real transport
+ * must honor.
+ */
+export const PHASE11_STATUS = "IMPLEMENTED" as const;
+
+export * from "./decisionJournal.js";
+export * from "./notificationEngine.js";
+export * from "./multidevice/concurrency.js";
+export * from "./integrations/providerQuota.js";
+export * from "./knowledgeGraph.js";
+export * from "./shadowAgent.js";

@@ -1522,3 +1522,102 @@ export type AndroidScreen =
   | "OPPORTUNITY_RADAR" | "ELIGIBILITY" | "CLAIMS" | "REWARDS" | "REPORTS"
   | "NOTIFICATIONS" | "HUMAN_HANDOFF" | "APPROVALS" | "SECURITY_ALERTS"
   | "AGENT_STATUS" | "DEVICE_MANAGEMENT" | "BACKUP_MIGRATION_STATUS" | "KILL_SWITCH";
+
+// ---------------------------------------------------------------------
+// Phase 11: Decision Journal, Notification Engine, Distributed Lock /
+// Job Lease, Provider Quota, Knowledge Graph, Shadow Agent.
+// ---------------------------------------------------------------------
+
+export type DecisionType = "DO" | "WAIT" | "WATCH" | "SKIP" | "RESEARCH_MORE" | "HUMAN_REVIEW" | "BLOCK" | "NO_ACTION";
+
+export interface DecisionJournalEntry {
+  decisionId: string;
+  projectId: string | null;
+  campaignId: string | null;
+  decision: DecisionType;
+  reason: string;
+  evidenceIds: string[];
+  confidence: number;
+  alternative: string | null;
+  outcome: string | null;
+  decidedAt: string;
+  reconsideredAt: string | null;
+}
+
+export type NotificationSeverity = "INFO" | "WARNING" | "URGENT" | "CRITICAL";
+export type NotificationDeliveryMode = "IMMEDIATE" | "HOURLY" | "DAILY" | "WEEKLY";
+
+export interface NotificationRecord {
+  notificationId: string;
+  fingerprint: string;
+  eventId: string | null;
+  severity: NotificationSeverity;
+  title: string;
+  body: string;
+  deliveryMode: NotificationDeliveryMode;
+  createdAt: string;
+  sentAt: string | null;
+  acknowledgedAt: string | null;
+  escalatedFrom: NotificationSeverity | null;
+}
+
+export type LockStatus = "HELD" | "RELEASED" | "EXPIRED";
+
+export interface DistributedLockRecord {
+  lockKey: string;
+  ownerId: string;
+  deviceId: string | null;
+  acquiredAt: string;
+  expiresAt: string;
+  heartbeatAt: string;
+  status: LockStatus;
+}
+
+export type JobLeaseStatus = "ACTIVE" | "COMPLETED" | "EXPIRED" | "RECOVERED";
+
+export interface JobLeaseRecord {
+  jobId: string;
+  ownerId: string;
+  deviceId: string | null;
+  workerId: string;
+  leaseExpiresAt: string;
+  heartbeatAt: string;
+  status: JobLeaseStatus;
+}
+
+export type ProviderQuotaKind = "RPC" | "EXPLORER" | "LLM" | "RESEARCH" | "DISCORD" | "SOCIAL" | "QUEST" | "BROWSER";
+export type ProviderQuotaStatus = "OK" | "NEAR_LIMIT" | "EXHAUSTED" | "NOT_CONFIGURED";
+
+export interface ProviderQuotaRecord {
+  providerId: string;
+  kind: ProviderQuotaKind;
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  resetAt: string | null;
+  status: ProviderQuotaStatus;
+}
+
+export interface KnowledgeGraphNode {
+  nodeId: string;
+  nodeType: string;
+  label: string;
+}
+
+export interface KnowledgeGraphEdge {
+  fromNodeId: string;
+  toNodeId: string;
+  relation: string;
+}
+
+export interface ShadowAgentComparison {
+  runId: string;
+  liveRecommendation: string;
+  shadowRecommendation: string;
+  liveRisk: string | null;
+  shadowRisk: string | null;
+  liveCost: number | null;
+  shadowCost: number | null;
+  agree: boolean;
+  comparedAt: string;
+}
