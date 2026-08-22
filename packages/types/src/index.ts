@@ -652,3 +652,193 @@ export interface EligibilityProofPackage {
   state: EligibilityState;
   generatedAt: string;
 }
+
+// ---------------------------------------------------------------------
+// Phase 5: Blockchain / Activity / Snapshot / Points / Opportunity Radar
+// ---------------------------------------------------------------------
+
+export type EvmChain =
+  | "ETHEREUM" | "BASE" | "ARBITRUM" | "OPTIMISM" | "POLYGON"
+  | "BNB_CHAIN" | "AVALANCHE" | "ZKSYNC" | "LINEA" | "SCROLL" | "BLAST";
+
+// Non-EVM chains are declared but every adapter for them is
+// NOT_CONFIGURED in Phase 5 - the type exists so later phases can add
+// real adapters without touching this union's call sites.
+export type NonEvmChain = "SOLANA" | "SUI" | "APTOS";
+
+export type ChainId = EvmChain | NonEvmChain;
+
+export type RpcProviderRole = "PRIMARY" | "BACKUP" | "BACKUP2" | "BACKUP3";
+
+export type RpcProviderHealth = "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "CIRCUIT_OPEN" | "NOT_CONFIGURED";
+
+export interface RpcProviderConfig {
+  providerId: string;
+  chain: ChainId;
+  role: RpcProviderRole;
+  url: string | null; // null => NOT_CONFIGURED, never fabricated
+}
+
+export interface RpcProviderState {
+  providerId: string;
+  health: RpcProviderHealth;
+  consecutiveFailures: number;
+  lastLatencyMs: number | null;
+  lastError: string | null;
+  lastCheckedAt: string | null;
+  circuitOpenedAt: string | null;
+  rateLimitedUntil: string | null;
+}
+
+export type ActivityType =
+  | "SWAP" | "BRIDGE" | "LEND" | "BORROW" | "LP_PROVIDE" | "LP_WITHDRAW"
+  | "STAKE" | "UNSTAKE" | "RESTAKE" | "DELEGATE" | "UNDELEGATE" | "GOVERNANCE_VOTE"
+  | "NFT_MINT" | "NFT_TRADE" | "NFT_HOLD" | "CONTRACT_INTERACTION" | "PERPETUAL_TRADE"
+  | "PREDICTION_MARKET" | "PAYMENT" | "CROSS_CHAIN_MESSAGE";
+
+export type TransactionFinality =
+  | "PENDING" | "INCLUDED" | "CONFIRMED" | "FINALIZED" | "REORGED" | "DROPPED" | "REPLACED";
+
+export interface ActivityAttribution {
+  transactionHash: string;
+  traceId: string | null;
+  functionSelector: string | null;
+  contractAddress: string | null;
+  tokenAddress: string | null;
+  protocolId: string | null;
+  browserContextId: string | null;
+  taskId: string | null;
+  missionId: string | null;
+  campaignId: string | null;
+  projectId: string | null;
+  confidence: ClaimConfidence;
+}
+
+export interface OnChainActivity {
+  activityId: string;
+  chain: ChainId;
+  wallet: string;
+  type: ActivityType;
+  transactionHash: string;
+  blockNumber: number | null;
+  timestamp: string | null; // block timestamp, null while PENDING
+  finality: TransactionFinality;
+  gasUsed: string | null;
+  valueUsd: number | null;
+  attribution: ActivityAttribution | null;
+  supersededBy: string | null; // activityId of the replacement, set on REPLACED/REORGED
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReorgEvent {
+  reorgId: string;
+  chain: ChainId;
+  detectedAt: string;
+  oldBlockHash: string;
+  newBlockHash: string;
+  fromBlock: number;
+  toBlock: number;
+  affectedActivityIds: string[];
+}
+
+export type ReconciliationStatus = "MATCH" | "RECONCILIATION_REQUIRED";
+
+export interface ReconciliationSource {
+  sourceType: "PRIMARY_RPC" | "BACKUP_RPC" | "EXPLORER" | "INDEXER";
+  value: string;
+}
+
+export interface ReconciliationResult {
+  reconciliationId: string;
+  chain: ChainId;
+  subject: string; // e.g. `${txHash}:finality` or `${wallet}:balance:${block}`
+  sources: ReconciliationSource[];
+  status: ReconciliationStatus;
+  checkedAt: string;
+}
+
+// Historical state must NEVER be derived from current state - every
+// record here is pinned to a specific block/timestamp and, once
+// written, is only ever superseded (reorg) not overwritten in place.
+export interface HistoricalStateRecord {
+  recordId: string;
+  chain: ChainId;
+  wallet: string;
+  block: number;
+  blockTimestamp: string;
+  kind: "BALANCE" | "NFT_HOLDING" | "LP_POSITION" | "STAKING_POSITION" | "GOVERNANCE_POWER" | "ACTIVITY_SUMMARY";
+  data: Record<string, unknown>;
+  invalidatedByReorgId: string | null;
+  recordedAt: string;
+}
+
+export interface SnapshotProof {
+  snapshotProofId: string;
+  projectId: string;
+  campaignId: string | null;
+  snapshotBlock: number;
+  snapshotTimestamp: string;
+  wallet: string;
+  asset: string | null;
+  balance: string | null;
+  requirementId: string | null;
+  requirementVersion: number | null;
+  result: EligibilityState;
+  evidence: string[]; // historicalStateRecord ids / reconciliationResult ids
+  confidence: ClaimConfidence;
+  generatedAt: string;
+}
+
+export type PointsUnit = "POINTS" | "XP";
+
+export interface PointsLedgerEntry {
+  entryId: string;
+  agentId: string;
+  projectId: string;
+  seasonId: string | null;
+  epochId: string | null;
+  unit: PointsUnit;
+  amount: number; // can be negative (decay/penalty)
+  multiplier: number;
+  reason: string;
+  sourceActivityId: string | null;
+  recordedAt: string;
+}
+
+export interface RankThreshold {
+  rank: string;
+  minTotal: number;
+}
+
+export interface OpportunitySignal {
+  opportunityId: string;
+  projectId: string | null;
+  title: string;
+  category:
+    | "NEW_PROJECT" | "CAMPAIGN" | "TESTNET" | "POINTS_PROGRAM" | "QUEST"
+    | "WAITLIST" | "BETA" | "EARLY_ACCESS" | "DEVELOPER" | "DEPIN"
+    | "GAMING" | "AI_COMPUTE" | "COMMUNITY" | "POTENTIAL_RETROACTIVE";
+  discoveredAt: string;
+  claimWindowEnd: string | null;
+  officialEvidenceCount: number;
+  sourceConfidence: ClaimConfidence;
+}
+
+export interface OpportunityScoreInput {
+  officialEvidenceStrength: number; // 0..1
+  projectQuality: number; // 0..1
+  cost: number; // 0..1, higher = more expensive
+  time: number; // 0..1, higher = more time required
+  risk: number; // 0..1, higher = riskier
+  deadlinePressure: number; // 0..1, higher = more urgent
+  competition: number; // 0..1, higher = more saturated
+  userFit: number; // 0..1
+  confidence: ClaimConfidence;
+}
+
+export interface OpportunityScoreResult {
+  score: number; // 0..1, never a guarantee of reward
+  breakdown: Record<string, number>;
+  confidence: ClaimConfidence;
+}

@@ -39,3 +39,22 @@ export * from "./task.js";
 export * from "./mission.js";
 export * from "./eligibility.js";
 export * from "./nextBestAction.js";
+
+/**
+ * Phase 5: Blockchain / Activity / Snapshot / Points / Opportunity
+ * Radar. No live RPC providers are configured in this repository - the
+ * RpcManager is pure state management, driven by real call outcomes
+ * the API/worker layer reports to it. Every provider without a
+ * `url` is NOT_CONFIGURED, never fabricated as healthy.
+ */
+export const CHAIN_STATUS = "IMPLEMENTED" as const;
+
+export * from "./chain/rpcManager.js";
+export * from "./chain/finality.js";
+export * from "./chain/reorg.js";
+export * from "./chain/reconciliation.js";
+export * from "./chain/attribution.js";
+export * from "./chain/historicalState.js";
+export * from "./chain/snapshotProof.js";
+export * from "./chain/points.js";
+export * from "./chain/opportunityRadar.js";

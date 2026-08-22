@@ -1,6 +1,6 @@
 # CURRENT STATE — Personal Airdrop AI Operating System V12
 
-Last updated: end of Phase 4.
+Last updated: end of Phase 5.
 
 ## Current architecture
 pnpm monorepo. Fastify API + Drizzle/Postgres + Redis/BullMQ backend.
@@ -11,162 +11,163 @@ persistence or the API:
 - Phase 3: Project/Research/Evidence/Campaign/Airdrop intelligence
 - Phase 4: Requirement versioning, identity graph, wallet metadata,
   mission/task DAG, eligibility engine, next-best-action
+- Phase 5: RPC manager (failover/circuit breaker), on-chain activity
+  types + finality state machine, reorg detection/protection, RPC
+  reconciliation, attribution chain, historical state store, snapshot
+  proof builder, points/XP ledger, opportunity radar scoring
 
 Next.js web app and PC/extension/Android agents are still scaffolded but
-empty. See `docs/phases/PHASE-1.md` through `PHASE-4.md` for full detail.
+empty. See `docs/phases/PHASE-1.md` through `PHASE-5.md` for full detail.
 
 ## Completed / tested (this sandbox)
 - Monorepo scaffold, fail-closed config loading
 - Drizzle schema for 15 tables (13 Phase 1 + `memory_entries` +
   `tool_registry`) + 3 generated SQL migrations
-- Device trust-state machine (unit tested)
-- Secret redaction (unit tested)
-- Device-bound access/refresh token issuance + verification (unit tested)
-- Fastify health/readiness endpoints (unit tested with mocked db/redis)
+- Device trust-state machine, secret redaction, device-bound
+  access/refresh tokens, health/readiness endpoints — all unit tested
 - Agent OS Kernel: 17-state machine, event bus, memory store, tool
-  registry, permission-scoped tool execution, run limits — 48 tests
-- `TRANSACTION_APPROVAL` confirmed never implicitly granted (test-covered)
-- Project lifecycle store (12-state machine) — unit tested
-- Evidence graph: sources, content-hashed snapshots, diff/change
-  detection, claims, full-lineage evidence, contradiction resolution
-  favoring PRIMARY_OFFICIAL over community/rumor regardless of source
-  count or reputation — unit tested
-- Source reputation tracker (accuracy/availability/freshness,
-  weighting signal only) — unit tested
-- Research engine: discover/retrieve/normalize/deduplicate/ingest/
-  verify/isStale pipeline — unit tested
-- Airdrop-type classification (~80 types, falls back to
-  UNKNOWN_AIRDROP_TYPE, never throws) — unit tested
-- Airdrop adapter contract + registry with NOT_CONFIGURED stub — unit tested
-- First real (declarative) tool registered: `source.http_fetch`
-- Requirement store: append-only versioning, never overwrites history,
-  `versionAt()` historical-backtesting lookup — unit tested
-- Identity graph: USER -> 9 account types, never silently merges a
-  cross-user conflict, explicit `reassociate()` for intentional
-  reassignment — unit tested
-- Wallet metadata store (no keys/signing) — unit tested
-- Task DAG: structurally cycle-free construction, dependency-gated
-  unblocking (READY vs WAITING_HUMAN) — unit tested
-- Mission store: validated status transitions, task-derived progress,
-  auto-completion — unit tested
-- Eligibility engine: per-requirement-version backtested evaluation,
-  proof-package generation citing exact requirement versions used —
-  unit tested
-- `decideNextBestAction()`: pure decision function, all 8 outputs
-  covered — unit tested
-- Typecheck clean across all 9 packages/apps; 142/142
-  @airdrop-os/core tests passing (48 Phase 1–2 + 46 Phase 3 + 48 Phase
-  4); 157 tests passing repo-wide excluding the live-DB-only auth suite
+  registry, permission-scoped tool execution, run limits
+- Project lifecycle, evidence graph (content-hashed snapshots,
+  contradiction resolution favoring PRIMARY_OFFICIAL), source
+  reputation, research pipeline, airdrop-type classification (~80
+  types), adapter registry
+- Requirement versioning (append-only, `versionAt()` backtesting),
+  identity graph, wallet metadata, task DAG (cycle-free), mission
+  store, eligibility engine (per-version backtested), next-best-action
+- **Phase 5 (new this session):**
+  - `RpcManager`: per-chain primary/backup/backup2/backup3 ordering,
+    circuit breaker (opens after 5 consecutive failures, half-opens
+    after 60s), rate-limit cooldown, NOT_CONFIGURED for providers with
+    no URL — never fabricated healthy
+  - `TransactionFinality` state machine: PENDING->INCLUDED->CONFIRMED->
+    FINALIZED, REORGED reachable even from FINALIZED, DROPPED/REPLACED
+    terminal
+  - `detectReorg()`/`applyReorgToActivity()`: identifies exactly the
+    activities in a reorged block range, marks REORGED without
+    fabricating replacement data
+  - `reconcile()`: requires ALL sources (primary/backup RPC, explorer,
+    indexer) to agree - one dissenter forces RECONCILIATION_REQUIRED
+  - `buildAttribution()`: derives confidence from how much of the
+    tx->trace->...->project chain is actually populated
+  - `HistoricalStateStore`: append-only, fails closed on missing
+    historical data (never substitutes current state), reorg
+    invalidation retains records rather than deleting them
+  - `buildSnapshotProof()`: refuses to build without at least one
+    evidence citation
+  - `PointsLedger`: append-only, POINTS/XP kept structurally separate
+    (type-enforced, never a token balance), leaderboard/rank/decay
+  - `scoreOpportunity()`: confidence-capped scoring across 8 factors,
+    explainable breakdown, never implies a guaranteed reward
+- Typecheck clean across all 9 packages/apps; **180/180**
+  `@airdrop-os/core` tests passing (142 Phase 1-4 + 38 new Phase 5);
+  195 tests passing repo-wide excluding the live-DB-only auth suite
 
 ## Partial / mocked / not-configured
-- `/auth/*` routes exercised against a real local Postgres/Redis (see
-  Known bugs) — `/devices/*` has **not** yet been run against a live DB.
+- `/auth/*` routes exercised against a real local Postgres/Redis in a
+  prior session (see Known bugs) - `/devices/*` still not run against
+  a live DB
 - `apps/web`, `apps/local-agent`, `apps/extension`, `apps/android`:
   NOT_CONFIGURED, workspace placeholders only
-- `packages/core` (all of Phases 2–4's stores): **in-memory only** — no
-  repository layer connects any of it to `packages/database` yet.
-  Phases 3 and 4 have now both deferred a persistence layer; flagged in
-  PHASE-4.md as a natural point to address together in a future phase
-  rather than deferring a third time.
+- `packages/core` (all of Phases 2-5's stores): **in-memory only** - no
+  repository layer connects any of it to `packages/database` yet. This
+  is now the **fourth consecutive phase** to defer persistence,
+  flagged again as worth addressing together rather than a fifth time
+- `RpcManager` has zero real RPC provider URLs configured - no
+  Alchemy/Infura/etc. API keys exist in this environment. No real
+  network calls are made anywhere in Phase 5; the state-management
+  logic is complete but unconnected to any live chain
+- No indexer/explorer API integration for `reconcile()` - the shape
+  supports it, no adapter calls a real one
+- Solana/Sui/Aptos: type placeholders only, no adapter logic
 - `ToolRegistry` has one real (declarative) tool entry
   (`source.http_fetch`) but no executor anywhere in the repo yet
-- **No real `AirdropAdapter` implementations** — every AirdropType
+- No real `AirdropAdapter` implementations - every AirdropType
   resolves to the NOT_CONFIGURED stub
-- **`EligibilityEngine`'s satisfaction check is minimum/maximum/chain-
-  threshold only** — duration-based requirements (e.g. "held for 30+
-  days") are not yet computed from activity timestamps. The historical-
-  backtesting mechanism itself (evaluating against the requirement
-  version valid at each activity's timestamp) is fully implemented and
-  tested; requirement-dimension coverage is partial.
-- `decideNextBestAction()`'s risk threshold and
-  `EligibilityEngine.deriveState()`'s exact state-derivation boundaries
-  are reasonable defaults, not spec-mandated constants — isolated
-  single-purpose functions, easy to tune later without touching
-  anything else
-- No API route exposes the kernel or any Phase 3/4 store yet
+- `EligibilityEngine`'s satisfaction check is minimum/maximum/chain-
+  threshold only - duration-based requirements not yet computed
+- No API route exposes the kernel or any Phase 3/4/5 store yet
 - `apps/worker`: only a placeholder heartbeat queue
 - Rate limiting: single global limiter only
+- Gas/volume/frequency/active-days/unique-contracts aggregation
+  functions not built this phase - the `OnChainActivity` type captures
+  the raw data; rollups are a natural follow-up
 
 ## Known bugs / security issues
 ### Phase 1 (fixed via live-DB verification against real Postgres)
-1. **`/auth/register` had no transaction** — fixed via
-   `db.transaction(...)`.
-2. **`formatAgentLabel(1)` was hardcoded** — fixed via a Postgres
-   sequence (`agent_label_seq`, migration `0002_majestic_red_ghost.sql`).
-
-Also fixed: malformed `device` object leaking a raw Postgres
-constraint name — `validateDevice()` now returns a clean `400`.
-
-Regression tests: `apps/api/src/__tests__/auth.register.test.ts` (runs
-against a real Postgres test database).
+1. `/auth/register` had no transaction - fixed via `db.transaction(...)`.
+2. `formatAgentLabel(1)` was hardcoded - fixed via a Postgres sequence.
+Also fixed: malformed `device` object leaking a raw Postgres constraint
+name - `validateDevice()` now returns a clean `400`.
 
 ### Phase 3 (found and fixed via unit testing)
-3. **`ResearchEngine.deduplicate()` matched on
-   `(projectId, field, valueHash)` instead of `(projectId, field)`.**
-   Conflicting values for the same field silently became two
-   non-conflicting claims instead of being flagged `CONFLICTED`.
-   **Fixed** by matching on field only. See `PHASE-3.md`.
+3. `ResearchEngine.deduplicate()` matched on
+   `(projectId, field, valueHash)` instead of `(projectId, field)`,
+   silently hiding conflicting claims as non-conflicting. Fixed.
 
-### Phase 4 (test-quality issue found and fixed, no production code change)
-4. **Two new tests initially failed** due to calling `create()` then
-   `supersede()` back-to-back with real wall-clock timestamps, which
-   can land in the same millisecond and make `versionAt()`'s half-open
-   interval genuinely ambiguous for that instant (correct interval
-   semantics, not a store bug). **Fixed** by using `vi.useFakeTimers()`
-   to give the two versions genuine time separation in the test. See
-   `PHASE-4.md`.
+### Phase 4 (test-quality issue, no production code change)
+4. Two tests initially failed due to real wall-clock timestamps landing
+   in the same millisecond; fixed with `vi.useFakeTimers()`.
+
+### Phase 5
+No bugs found in what was built this phase - but see Caveats: the
+entire phase is untested against a live chain, so integration-level
+bugs (real reorg depth, real RPC error shapes, real rate-limit headers)
+remain unverified by construction, not because they were checked and
+found absent.
 
 Caveats still open:
 - Concurrent-refresh races and kernel-to-DB persistence races remain
-  unverified (Phase 1/2).
+  unverified (Phase 1/2)
 - Phase 2 was previously built once already (commit `f7db4b2`) and
   reverted (`df172d1`) with no reason recorded in that revert's commit
-  message.
-- Phase 3/4's in-memory stores are untested against realistic data
-  volumes or concurrent writers.
+  message
+- Phase 3/4/5's in-memory stores are untested against realistic data
+  volumes or concurrent writers
 
 ## Migrations
-- `packages/database/drizzle/0000_tearful_rafael_vega.sql` — 13 Phase 1
-  tables
-- `packages/database/drizzle/0001_mixed_sister_grimm.sql` — Phase 2 tables
-- `packages/database/drizzle/0002_majestic_red_ghost.sql` — `agent_label_seq`
-
-No new migration in Phase 3 or Phase 4 (see Partial / not-configured).
-All three existing migrations have been applied and exercised against
-a real local Postgres instance during the Phase 1 live-DB bug-fix pass.
+- `0000_tearful_rafael_vega.sql` - 13 Phase 1 tables
+- `0001_mixed_sister_grimm.sql` - Phase 2 tables
+- `0002_majestic_red_ghost.sql` - `agent_label_seq`
+No new migration in Phase 3, 4, or 5 (all defer persistence - see
+Partial/not-configured).
 
 ## API routes
 `GET /health`, `GET /readiness`, `POST /auth/register`,
 `POST /auth/login`, `POST /auth/refresh`, `POST /auth/revoke`,
-`GET /devices`, `POST /devices/transition`
-
-No kernel-backed or Phase 3/4-backed routes exist yet.
+`GET /devices`, `POST /devices/transition`. No kernel- or Phase
+3/4/5-backed routes exist yet.
 
 ## Environment variables
 `NODE_ENV`, `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`,
 `JWT_REFRESH_SECRET`, `ACCESS_TOKEN_TTL_SECONDS`,
 `REFRESH_TOKEN_TTL_SECONDS`, `API_HOST`, `API_PORT`, `RATE_LIMIT_MAX`,
-`RATE_LIMIT_WINDOW_MS`, `POSTGRES_PASSWORD`. No new env vars needed for
-Phase 2, 3, or 4.
+`RATE_LIMIT_WINDOW_MS`, `POSTGRES_PASSWORD`. No new env vars this
+phase - real RPC URLs will be needed once network calls are wired up,
+not added speculatively without real values.
 
 ## Required external integrations
-None required through Phase 4. Phase 6+ will need browser automation,
-Phase 8+ will need Discord/X/Telegram/GitHub API credentials — all
-currently NOT_CONFIGURED.
+RPC providers per chain (Alchemy/Infura/self-hosted): **NOT_CONFIGURED**.
+Block explorers/indexers: **NOT_CONFIGURED**. Phase 8+ will need
+Discord/X/Telegram/GitHub API credentials: **NOT_CONFIGURED**.
 
 ## Next-phase dependencies
-Phase 5 (per `PERSONAL_AIRDROP_AI_OS_V12_10_PHASES/PHASE-5.md`, present
-in the repo but not yet read in this session) would consume:
-`RequirementStore`, `EligibilityEngine`, `MissionStore` + `TaskGraph`,
-`IdentityGraph` + `WalletStore`, and `decideNextBestAction()`.
+Phase 6 (per `PERSONAL_AIRDROP_AI_OS_V12_10_PHASES/PHASE-6.md`, present
+in the repo but not yet read in this session) is Browser / PC Agent /
+Extension / Workflow / Checkpoint - expected to consume the kernel's
+tool registry and event bus, plus `RequirementStore`/`MissionStore`/
+`TaskGraph` from Phase 4, and will likely be the first phase to
+actually exercise `RpcManager` if it needs to read on-chain state
+during a workflow.
 
 ## Exact recommended next action
 1. On a machine with Docker: `docker compose up -d`, then
-   `pnpm --filter @airdrop-os/database db:migrate`, then confirm
-   `/readiness` reports `CONNECTED` for both Postgres and Redis.
-2. Manually exercise `/auth/register` → `/auth/login` →
-   `/devices/transition` → `/auth/refresh` against the real database.
-3. Hand `PHASE-5.md` (confirmed present in
+   `pnpm --filter @airdrop-os/database db:migrate`, confirm
+   `/readiness` reports CONNECTED for both Postgres and Redis.
+2. If/when real RPC provider credentials become available, wire a real
+   `ethers`/`viem` client behind `RpcManager.selectProvider()`'s output
+   and exercise `reconcile()` against real primary/backup/explorer
+   responses before trusting Phase 5 in production.
+3. Hand `PHASE-6.md` (confirmed present in
    `PERSONAL_AIRDROP_AI_OS_V12_10_PHASES/`) to Claude in a fresh chat
    pointed at this repository, per the README's sequential-build
    instructions.
