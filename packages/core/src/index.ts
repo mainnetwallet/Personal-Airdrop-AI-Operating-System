@@ -119,3 +119,23 @@ export * from "./integrations/integrationRegistry.js";
 export * from "./adapters/mockOffChainAdapter.js";
 export * from "./adapters/phase8Adapters.js";
 export * from "./plugins/pluginSdk.js";
+
+/**
+ * Phase 9: Android control client / multi-device / backup / restore /
+ * migration. All logic here is pure state management, like Phases 2-8
+ * - no real Android SDK, emulator, live VPS-to-VPS/PC-to-PC transport,
+ * or encryption implementation exists in this sandbox. Android never
+ * receives secret material (enforced by DeviceRegistry, not just
+ * documented). Split-brain protection guarantees at most one ACTIVE
+ * coordinator per agentId. Incompatible checkpoints route to
+ * DO_NOT_RESUME, never a best-effort resume.
+ */
+export const MULTIDEVICE_STATUS = "IMPLEMENTED" as const;
+
+export * from "./multidevice/deviceRegistry.js";
+export * from "./multidevice/checkpointCompat.js";
+export * from "./multidevice/recovery.js";
+export * from "./multidevice/backup.js";
+export * from "./multidevice/restore.js";
+export * from "./multidevice/migration.js";
+export * from "./multidevice/disasterRecovery.js";

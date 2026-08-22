@@ -1,0 +1,6 @@
+{
+  "name": "@airdrop-os/android",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": { "build": "echo 'Android app scaffold - no SDK/Gradle toolchain in this sandbox, see README.md'" }
+}

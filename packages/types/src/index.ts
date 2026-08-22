@@ -1389,3 +1389,136 @@ export interface PluginRegistration {
   lastHealthCheckAt: string | null;
   blockedReason: string | null;
 }
+
+// ---------------------------------------------------------------------
+// Phase 9 — Android / multi-device / backup / restore / migration
+// ---------------------------------------------------------------------
+
+// One Agent Identity is shared across every physical/logical device.
+// Android never receives secret material (private keys, seeds,
+// passwords, OTP/2FA, session tokens) - it is a control/visibility
+// client only.
+export type DeviceKind = "VPS" | "PC" | "ANDROID" | "WEB" | "CHROME_EXTENSION";
+
+export type CoordinatorRole = "ACTIVE" | "STANDBY" | "READ_ONLY" | "STOPPED";
+
+export interface DeviceRecord {
+  deviceId: string;
+  agentId: string;
+  kind: DeviceKind;
+  role: CoordinatorRole;
+  registeredAt: string;
+  lastSeenAt: string | null;
+  // Android/Web/Extension are never granted a path to secret material
+  // regardless of role - enforced structurally, not just documented.
+  receivesSecrets: boolean;
+}
+
+// Extends Phase 6's CheckpointVersions (schema/agent/workflow) with the
+// additional dimensions Phase 9 requires for cross-device resume safety.
+// Reuses CheckpointVersions rather than duplicating its three fields.
+export interface MultiDeviceCheckpointVersions extends CheckpointVersions {
+  projectVersion: number;
+  campaignVersion: number;
+  requirementVersion: number;
+  browserStateHash: string | null;
+  walletAccountContextHash: string | null;
+  securityStateHash: string;
+}
+
+export interface MultiDeviceCheckpointRecord {
+  checkpointId: string;
+  sourceDeviceId: string;
+  versions: MultiDeviceCheckpointVersions;
+  safeState: Record<string, unknown>;
+  createdAt: string;
+}
+
+export type RecoveryFailureDomain =
+  | "VPS" | "WORKER" | "PC" | "BROWSER" | "NETWORK" | "RPC" | "ANDROID" | "SESSION";
+
+export type RecoveryStage = "CHECKPOINT" | "RESTORE" | "VERIFY" | "RESUME" | "DO_NOT_RESUME";
+
+export interface RecoveryAttempt {
+  failureDomain: RecoveryFailureDomain;
+  checkpointId: string | null;
+  stage: RecoveryStage;
+  reason: string | null;
+  attemptedAt: string;
+}
+
+// Backups never include secrets (private keys, seeds, passwords,
+// OTP/2FA, session tokens, raw API secrets) - only operational/business
+// data. `encrypted` records whether the caller-supplied encryption step
+// actually ran; a manifest is never marked encrypted unless it was.
+export interface BackupManifest {
+  backupId: string;
+  agentId: string;
+  schemaVersion: string;
+  databaseVersion: string;
+  createdAt: string;
+  sourceDevice: DeviceKind;
+  encrypted: boolean;
+  recordCounts: Record<string, number>;
+  contentHashes: Record<string, string>;
+  integrityStatus: "VERIFIED" | "UNVERIFIED" | "MISMATCH";
+}
+
+export interface RestoreVerificationResult {
+  backupId: string;
+  countsMatch: boolean;
+  hashesMatch: boolean;
+  relationshipsMatch: boolean;
+  checkpointsRestored: boolean;
+  workflowsRestored: boolean;
+  mismatchedEntities: string[];
+  status: "PASSED" | "FAILED";
+  verifiedAt: string;
+}
+
+export type MigrationRoute = "VPS_TO_VPS" | "PC_TO_PC" | "PC_TO_VPS" | "VPS_TO_PC" | "ANDROID_TO_ANDROID";
+
+export interface MigrationDryRunReport {
+  route: MigrationRoute;
+  recordCounts: Record<string, number>;
+  conflicts: string[];
+  missingDependencies: string[];
+  invalidCheckpoints: string[];
+  schemaDifferences: string[];
+  unsupportedPlugins: string[];
+  featureDegradations: string[];
+  // Only SAFE_TO_PROCEED when every list above is empty.
+  verdict: "SAFE_TO_PROCEED" | "BLOCKED";
+  generatedAt: string;
+}
+
+export type MigrationStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "ROLLED_BACK" | "FAILED";
+
+export interface MigrationExecutionResult {
+  route: MigrationRoute;
+  status: MigrationStatus;
+  // Stable IDs (agentId, projectId, etc.) are preserved across a
+  // migration - this records that the executor did not reassign any.
+  preservedStableIds: boolean;
+  rollbackReason: string | null;
+  completedAt: string | null;
+}
+
+export interface DisasterRecoveryTestResult {
+  backupId: string;
+  destroyedTestInstanceId: string;
+  restoreResult: RestoreVerificationResult;
+  identityVerified: boolean;
+  relationshipsVerified: boolean;
+  status: "PASSED" | "FAILED";
+  ranAt: string;
+}
+
+// Android control-client surface - visibility/control only, no secret
+// material. NOT_CONFIGURED in this sandbox: no Android SDK, emulator,
+// or device build tooling available.
+export type AndroidScreen =
+  | "DASHBOARD" | "PROJECTS" | "CAMPAIGNS" | "MISSIONS" | "TASKS"
+  | "OPPORTUNITY_RADAR" | "ELIGIBILITY" | "CLAIMS" | "REWARDS" | "REPORTS"
+  | "NOTIFICATIONS" | "HUMAN_HANDOFF" | "APPROVALS" | "SECURITY_ALERTS"
+  | "AGENT_STATUS" | "DEVICE_MANAGEMENT" | "BACKUP_MIGRATION_STATUS" | "KILL_SWITCH";
