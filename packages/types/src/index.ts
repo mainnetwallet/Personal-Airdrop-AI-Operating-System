@@ -1055,3 +1055,275 @@ export interface RecoveryEvent {
   detectedAt: string;
   resolvedAt: string | null;
 }
+
+// =====================================================================
+// Phase 7: Advanced Security / Transaction Firewall / Claim / EIP-7702
+// =====================================================================
+
+// --- Transaction firewall pipeline ---
+
+export type TxFirewallStage =
+  | "PREPARE" | "DECODE" | "VALIDATE" | "ESTIMATE" | "SIMULATE"
+  | "STATE_ANALYSIS" | "RISK" | "POLICY" | "INTENT_DIFF"
+  | "APPROVAL" | "SIGN" | "SUBMIT" | "VERIFY";
+
+export const TX_FIREWALL_STAGE_ORDER: TxFirewallStage[] = [
+  "PREPARE", "DECODE", "VALIDATE", "ESTIMATE", "SIMULATE",
+  "STATE_ANALYSIS", "RISK", "POLICY", "INTENT_DIFF",
+  "APPROVAL", "SIGN", "SUBMIT", "VERIFY",
+];
+
+export type TxFirewallVerdict = "ALLOW" | "BLOCK" | "NEEDS_USER_REVIEW";
+
+export type TxBlockReason =
+  | "PHISHING" | "FAKE_CLAIM" | "WRONG_CHAIN" | "WRONG_RECIPIENT"
+  | "DANGEROUS_APPROVAL" | "MALICIOUS_SIGNATURE" | "UNKNOWN_CONTRACT"
+  | "UNKNOWN_DELEGATION" | "UNSAFE_PERMISSION" | "STALE_APPROVAL"
+  | "STALE_SIMULATION" | "SUSPICIOUS_DOMAIN" | "UNEXPECTED_STATE_CHANGE"
+  | "MATERIAL_INTENT_CHANGE" | "EIP7702_UNKNOWN_TARGET" | "EIP7702_CHAIN_MISMATCH"
+  | "EMERGENCY_STOP" | "NOT_CONFIGURED";
+
+export interface TxIntent {
+  intentHash: string;
+  action: string; // e.g. "CLAIM", "APPROVE", "TRANSFER", "STAKE", "DELEGATE"
+  walletAddress: string;
+  chainId: number;
+  contractAddress: string | null;
+  recipient: string | null;
+  token: string | null;
+  amount: string | null; // decimal string, never a float
+  spender: string | null;
+  createdAt: string;
+}
+
+export interface TxIntentDiffField {
+  field: "action" | "walletAddress" | "chainId" | "contractAddress" | "recipient" | "token" | "amount" | "spender";
+  expected: string | null;
+  actual: string | null;
+  materialChange: boolean;
+}
+
+export interface TxIntentDiffResult {
+  intentHash: string;
+  fields: TxIntentDiffField[];
+  hasMaterialChange: boolean;
+  evaluatedAt: string;
+}
+
+// --- Approval binding ---
+
+export interface TxApproval {
+  approvalId: string;
+  projectId: string | null;
+  campaignId: string | null;
+  missionId: string | null;
+  taskId: string | null;
+  walletAddress: string;
+  accountId: string | null;
+  chainId: number;
+  contractAddress: string | null;
+  intentHash: string;
+  createdAt: string;
+  expiresAt: string;
+  status: "ACTIVE" | "EXPIRED" | "USED" | "REVOKED";
+  usedAt: string | null;
+}
+
+export type ApprovalCheckResult =
+  | { ok: true }
+  | { ok: false; reason: "STALE_APPROVAL" | "NOT_FOUND"; detail: string };
+
+// --- Simulation freshness ---
+
+export interface SimulationFingerprint {
+  simulationId: string;
+  intentHash: string;
+  blockNumber: string | null;
+  timestamp: string;
+  rpcProviderId: string | null;
+  stateFingerprint: string | null; // hash of relevant on-chain state read during simulation
+  succeeded: boolean;
+  revertReason: string | null;
+}
+
+export interface SimulationFreshnessCheck {
+  fresh: boolean;
+  reason: "OK" | "TOO_OLD" | "BLOCK_ADVANCED" | "NO_SIMULATION" | "RPC_MISMATCH";
+  maxAgeMs: number;
+  ageMs: number | null;
+}
+
+// --- Risk scoring / policy ---
+
+export type TxRiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export interface TxRiskFactor {
+  code: TxBlockReason | "LOW_REPUTATION_CONTRACT" | "NEW_CONTRACT" | "UNVERIFIED_SOURCE" | "UPGRADEABLE_PROXY" | "UNLIMITED_APPROVAL";
+  weight: number; // 0-100
+  detail: string;
+}
+
+export interface TxRiskAssessment {
+  intentHash: string;
+  level: TxRiskLevel;
+  score: number; // 0-100
+  factors: TxRiskFactor[];
+  assessedAt: string;
+}
+
+export interface TxPolicyDecision {
+  intentHash: string;
+  verdict: TxFirewallVerdict;
+  blockReasons: TxBlockReason[];
+  requiresUserApproval: boolean;
+  decidedAt: string;
+}
+
+// --- Domain protection ---
+
+export type DomainRiskSignal =
+  | "TYPOSQUATTING" | "UNICODE_LOOKALIKE" | "FAKE_SUBDOMAIN"
+  | "SUSPICIOUS_REDIRECT" | "URL_SHORTENER" | "UNEXPECTED_DOMAIN" | "KNOWN_PHISHING";
+
+export interface DomainCheckResult {
+  domain: string;
+  officialDomains: string[];
+  isOfficial: boolean;
+  signals: DomainRiskSignal[];
+  verdict: "SAFE" | "SUSPICIOUS" | "BLOCK";
+  checkedAt: string;
+}
+
+// --- Contract intelligence ---
+
+export type ContractCapability =
+  | "MINT" | "PAUSE" | "BLACKLIST" | "UPGRADEABLE" | "PROXY"
+  | "PERMIT" | "PERMIT2" | "MULTICALL" | "DELEGATECALL" | "SELFDESTRUCT";
+
+export interface ContractIntelligenceReport {
+  chainId: number;
+  address: string;
+  status: "CONNECTED" | "DEGRADED" | "NOT_CONFIGURED" | "EXPIRED" | "REVOKED" | "BLOCKED";
+  verifiedSource: boolean | null;
+  isProxy: boolean | null;
+  implementationAddress: string | null;
+  ownerAddress: string | null;
+  isUpgradeable: boolean | null;
+  capabilities: ContractCapability[];
+  deploymentAgeDays: number | null;
+  knownIncidents: string[];
+  lastChangedAt: string | null;
+  generatedAt: string;
+}
+
+// --- Claim security ---
+
+export interface ClaimSecurityCheck {
+  claimId: string;
+  officialSourceVerified: boolean;
+  domainCheck: DomainCheckResult | null;
+  contractCheck: ContractIntelligenceReport | null;
+  chainVerified: boolean;
+  functionVerified: boolean;
+  recipientVerified: boolean;
+  tokenVerified: boolean;
+  approvalCheck: ApprovalCheckResult | null;
+  simulationCheck: SimulationFreshnessCheck | null;
+  riskAssessment: TxRiskAssessment | null;
+  verdict: TxFirewallVerdict;
+  blockReasons: TxBlockReason[];
+  evaluatedAt: string;
+}
+
+// --- EIP-7702 delegation ---
+
+export interface Eip7702Authorization {
+  chainId: number;
+  authorizationNonce: string;
+  authorityAddress: string; // the EOA granting delegation
+  targetAddress: string; // the code/contract being delegated to
+  currentChainId: number; // chain the wallet is actually connected to
+  intendedChainId: number; // chain the user believes/intends this to apply to
+}
+
+export interface Eip7702TargetIntelligence {
+  targetAddress: string;
+  implementationKnown: boolean;
+  isProxy: boolean | null;
+  isUpgradeable: boolean | null;
+  initializationVerified: boolean;
+  storageCompatible: boolean | null;
+  auditEvidence: string[];
+  sourceStatus: "CONNECTED" | "NOT_CONFIGURED" | "UNKNOWN";
+}
+
+export interface Eip7702DelegationDiff {
+  currentTarget: string | null;
+  proposedTarget: string;
+  currentPermissions: string[];
+  proposedPermissions: string[];
+  affectedAssets: string[];
+  upgradeabilityChanged: boolean;
+}
+
+export interface Eip7702RiskResult {
+  authorization: Eip7702Authorization;
+  chainLockOk: boolean;
+  targetKnown: boolean;
+  verdict: TxFirewallVerdict;
+  blockReasons: TxBlockReason[];
+  delegationDiff: Eip7702DelegationDiff | null;
+  evaluatedAt: string;
+}
+
+// --- Anti-Sybil (awareness only, never bypass) ---
+
+export interface AntiSybilSignal {
+  signalId: string;
+  walletAddress: string;
+  code: string;
+  detail: string;
+  confidence: ClaimConfidence;
+  detectedAt: string;
+}
+
+export interface AntiSybilAwarenessReport {
+  walletAddress: string;
+  signals: AntiSybilSignal[];
+  note: "AWARENESS_ONLY_NEVER_BYPASSES_PLATFORM_PROTECTIONS";
+  generatedAt: string;
+}
+
+// --- Emergency stop ---
+
+export type EmergencyStopScope = "ALL_SENSITIVE_OPERATIONS" | "WALLET" | "PROJECT" | "SESSION";
+
+export interface EmergencyStopState {
+  active: boolean;
+  scope: EmergencyStopScope | null;
+  targetId: string | null; // walletAddress/projectId/sessionId depending on scope
+  reason: string | null;
+  activatedAt: string | null;
+  deactivatedAt: string | null;
+  readOnlyInvestigationAllowed: true;
+}
+
+// --- Prompt-injection defense ---
+
+export type UntrustedContentSource =
+  | "WEB" | "DISCORD" | "X" | "TELEGRAM" | "GITHUB" | "QUEST_PAGE" | "CONTRACT_METADATA";
+
+export interface PromptInjectionFinding {
+  source: UntrustedContentSource;
+  signal: string;
+  snippet: string; // truncated/redacted excerpt, never full untrusted payload
+  detectedAt: string;
+}
+
+export interface PromptInjectionScanResult {
+  source: UntrustedContentSource;
+  contentTreatedAsData: true;
+  findings: PromptInjectionFinding[];
+  suspicious: boolean;
+  scannedAt: string;
+}

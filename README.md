@@ -11,7 +11,7 @@ auto-signs or auto-transfers funds; fails closed when verification is
 unavailable.
 
 ## Status
-Phase 1 of 10 complete (foundation). See `docs/phases/CURRENT_STATE.md`.
+Phase 7 of 10 complete. See `docs/phases/CURRENT_STATE.md`.
 
 ## Getting started
 ```bash

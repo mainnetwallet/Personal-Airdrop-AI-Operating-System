@@ -77,3 +77,28 @@ export * from "./agent/workflow.js";
 export * from "./agent/teachAgent.js";
 export * from "./agent/captcha.js";
 export * from "./agent/recovery.js";
+
+/**
+ * Phase 7: Advanced Security / Transaction Firewall / Claim Security /
+ * EIP-7702. Every I/O-bound step (RPC calls, block explorer/bytecode
+ * lookups, live DNS/WHOIS, real simulation) is NOT_CONFIGURED in this
+ * sandbox - these modules are pure decision logic driven by data the
+ * caller supplies from a future real adapter, never fabricated results.
+ * The Security Agent's BLOCK verdict is final and nothing downstream
+ * overrides it back to ALLOW. Sensitive signing always remains
+ * user-controlled - the firewall never signs or submits itself.
+ */
+export const TX_FIREWALL_STATUS = "IMPLEMENTED" as const;
+
+export * from "./tx/domainProtection.js";
+export * from "./tx/contractIntelligence.js";
+export * from "./tx/intentDiff.js";
+export * from "./tx/approval.js";
+export * from "./tx/simulation.js";
+export * from "./tx/riskPolicy.js";
+export * from "./tx/claimSecurity.js";
+export * from "./tx/eip7702.js";
+export * from "./tx/antiSybil.js";
+export * from "./tx/emergencyStop.js";
+export * from "./tx/promptInjection.js";
+export * from "./tx/firewall.js";

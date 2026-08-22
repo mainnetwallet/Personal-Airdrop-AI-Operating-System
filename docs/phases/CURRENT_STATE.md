@@ -1,6 +1,6 @@
 # CURRENT STATE — Personal Airdrop AI Operating System V12
 
-Last updated: end of Phase 6.
+Last updated: end of Phase 7.
 
 ## Current architecture
 pnpm monorepo. Fastify API + Drizzle/Postgres + Redis/BullMQ backend.
@@ -21,14 +21,23 @@ persistence or the API:
   (observe -> draft, human decides SAVE/EDIT/DISCARD), CAPTCHA handoff
   state machine (never solves/bypasses), crash/network recovery
   (RESTORE -> VERIFY -> RESUME)
+- Phase 7: Transaction firewall (prepare->decode->validate->estimate->
+  simulate->state analysis->risk->policy->intent diff->approval->sign->
+  submit->verify), domain protection, contract intelligence, approval
+  binding, simulation freshness, risk/policy engine, claim security,
+  EIP-7702 delegation risk (unknown target BLOCKs by default, chain
+  lock), anti-Sybil awareness (never bypasses), emergency stop
+  (read-only investigation always allowed), prompt-injection scanner
+  for untrusted web/Discord/X/Telegram/GitHub/quest/contract content
 
-`apps/local-agent` and `apps/extension` are now real, tested wiring
-around Phase 6's core logic (job auth, session isolation, checkpoints,
-safe event redaction, teach sessions) but NOT_CONFIGURED for live
-execution — no Playwright browser, no reachable VPS, no Chrome runtime
-in this sandbox. `apps/web` and `apps/android` are still empty
-scaffolds. See `docs/phases/PHASE-1.md` through `PHASE-6.md` for full
-detail.
+`apps/local-agent` and `apps/extension` are real, tested wiring around
+Phase 6's core logic (job auth, session isolation, checkpoints, safe
+event redaction, teach sessions) but NOT_CONFIGURED for live execution —
+no Playwright browser, no reachable VPS, no Chrome runtime in this
+sandbox. `apps/web` and `apps/android` are still empty scaffolds. Phase
+7's transaction firewall is not yet wired into either app or into
+`apps/api` — see Next-phase dependencies. See `docs/phases/PHASE-1.md`
+through `PHASE-7.md` for full detail.
 
 ## Completed / tested (this sandbox)
 - Monorepo scaffold, fail-closed config loading
@@ -49,54 +58,67 @@ detail.
   machine, reorg detection, RPC reconciliation (all-sources-agree),
   attribution chain, historical state store, snapshot proof builder,
   points/XP ledger, opportunity radar scoring (see Phase 5 doc for
-  detail — unchanged this phase)
-- **Phase 6 (new this session):**
-  - `PcAgentAuthorizer`: time-boxed, scope-bound job authorizations;
-    checks validity/device-binding/scope on every call, never trusts a
-    previously-valid result
-  - `BrowserSessionManager`: isolation-key-based session separation
-    (project/campaign/mission/wallet/account/profile/chain/device all
-    must match) for both CONTROLLED_BROWSER and USER_BROWSER_EXTENSION
-    modes; refuses a duplicate OPEN session for the same isolation
-    context
-  - `toSafeBrowserEvent()`/`BrowserEventStore`: strips any
-    element-metadata field whose NAME looks sensitive
-    (password/seed/private-key/OTP/2FA/recovery-code/card/CVV/token),
-    decided on field name only, never value
-  - `CheckpointManager`: stores only safe state, refuses to checkpoint
-    a field that looks sensitive; `checkCompatibility()` requires exact
-    schema/agent/workflow version match before any resume
-  - `WorkflowStore`/`WorkflowRunner`: append-only version history
-    (V1/V2/... never overwritten), dependency-validated steps
-    (structurally cycle-free), HUMAN_GATE/APPROVAL_GATE steps pause
-    rather than run through, `handlePossibleRegression()` pauses a run
-    that fails after a prior success at the same version instead of
-    silently retrying
-  - `TeachAgentSession`: observe-only during teaching, confidence
-    capped by redaction/thinness of the observation, user always makes
-    the final SAVE/EDIT/DISCARD call
-  - `CaptchaHandoff`: strict DETECTED->PAUSED->CHECKPOINTED->
-    AWAITING_USER->USER_COMPLETED->VERIFIED->RESUMED state machine —
-    no transition solves or bypasses anything; `verify()` only accepts
-    a caller-supplied real-page confirmation
-  - `RecoveryManager`: RESTORE->VERIFY->RESUME with explicit
-    BLOCKED_NO_CHECKPOINT / BLOCKED_INCOMPATIBLE_CHECKPOINT /
-    BLOCKED_VERIFICATION_FAILED outcomes — never silently resumes
-  - `apps/local-agent`: fail-closed env config
-    (VPS_API_URL/DEVICE_ID/DEVICE_REFRESH_TOKEN), `LocalAgent` class
-    wiring the above together, health reporting;
-    `connectToVps()`/`launchBrowser()` are explicit NOT_CONFIGURED stubs
-  - `apps/extension`: real MV3 `manifest.json`, fail-closed zod message
-    schema (`messages.ts`), `ExtensionBackground.handleMessage` routing
-    into the *same* redaction/teach-session logic as the PC agent path,
-    `buildObservationMessage()` for content-script message construction;
-    `registerMessageListener()`/`authenticateDevice()`/`attachObservers()`
-    are explicit NOT_CONFIGURED stubs
-- Typecheck clean across all 11 packages/apps that have a `typecheck`
-  script (`apps/web`, `apps/android` don't); **233/233**
-  `@airdrop-os/core` tests passing (180 Phase 1-5 + 53 new Phase 6),
-  plus **14/14** new `apps/extension` tests; 253 tests passing
-  repo-wide excluding the live-DB-only auth suite
+  detail — unchanged since)
+- Phase 6: PC agent job authorization, browser session isolation
+  (isolation-key based), safe browser event capture (name-based
+  redaction), checkpointing (schema/agent/workflow version compatible
+  only), workflow engine (versioned, gated, regression-pause),
+  teach-agent (observe-only, human SAVE/EDIT/DISCARD), CAPTCHA handoff
+  (never solves/bypasses), crash/network recovery
+  (RESTORE->VERIFY->RESUME); `apps/local-agent`/`apps/extension` real
+  wiring around it (see Phase 6 doc for detail — unchanged this phase)
+- **Phase 7 (new this session), all in `packages/core/src/tx/`:**
+  - `checkDomain()`/`checkRedirectChain()`: offline typosquatting,
+    Unicode-homoglyph, fake-subdomain, and URL-shortener detection
+    against a caller-supplied official-domain list — no live DNS/WHOIS
+  - `buildContractIntelligenceReport()`: NOT_CONFIGURED with every
+    field null unless the caller supplies real connected-source data;
+    `isReportUsable()`/`hasDangerousCapability()` treat unknown/
+    unverified as risk, never a free pass
+  - `diffIntent()`: field-by-field expected-vs-actual comparison
+    (action/wallet/chain/contract/recipient/token/amount/spender);
+    any mismatch is a material change
+  - `ApprovalStore`: binds an approval to
+    project/campaign/mission/task/wallet/account/chain/contract/intent
+    hash/expiration; `checkAndConsume()` is single-use, never
+    re-validates a used/expired/revoked/mismatched approval
+  - `checkSimulationFreshness()`: stale on age, block-advanced, or
+    RPC-provider mismatch; never re-simulates itself
+  - `assessRisk()`/`decidePolicy()`: weighted risk factors ->
+    LOW/MEDIUM/HIGH/CRITICAL; hard-block factors (phishing, material
+    intent change, stale approval, low-reputation contract) force
+    BLOCK regardless of score; only LOW with no hard-block factors is
+    ALLOW
+  - `verifyClaimSecurity()`: ALLOW only when official
+    source/domain/contract/chain/function/recipient/token/approval/
+    simulation/risk are *all* explicitly verified
+  - `checkChainLock()`/`evaluateEip7702()`: EIP-7702 unknown target
+    BLOCKs by default with no exceptions; chain-lock mismatch BLOCKs;
+    even a fully known, chain-locked target returns
+    NEEDS_USER_REVIEW, never ALLOW; always carries a
+    current-vs-proposed delegation diff
+  - `AntiSybilAwarenessStore`: records/reports signals per wallet,
+    fixed awareness-only note, no code path bypasses a platform check
+  - `EmergencyStopController`: ALL_SENSITIVE_OPERATIONS/WALLET/
+    PROJECT/SESSION scoped freeze; read-only investigation always
+    allowed (fixed `true`)
+  - `scanForPromptInjection()`: pattern-matches untrusted external
+    content for instruction-override/secret-disclosure/auto-approve/
+    security-bypass attempts; every result fixed
+    `contentTreatedAsData: true`
+  - `runFirewall()`: orchestrates the full 13-stage pipeline; stops
+    immediately on any earlier-stage failure or Security Agent BLOCK
+    (final, never overridden downstream); checks emergency stop
+    immediately before SIGN; never reaches SUBMIT/VERIFY in this
+    sandbox — a fully clean run stops at SIGN with NEEDS_USER_REVIEW
+    because signing is user-controlled by contract, never automated
+- Typecheck clean across all 12 packages/apps that have a `typecheck`
+  script (`apps/web`, `apps/android` don't); **304/304**
+  `@airdrop-os/core` tests passing (233 Phase 1-6 + 71 new Phase 7),
+  plus **14/14** `apps/extension` tests (unchanged); 253 tests passing
+  repo-wide outside `packages/core` and excluding the live-DB-only auth
+  suite (unchanged from Phase 6), for 304+253=557 total non-live-DB
+  tests passing repo-wide
 
 ## Partial / mocked / not-configured
 - `/auth/*` routes exercised against a real local Postgres/Redis in a
@@ -115,10 +137,10 @@ detail.
   `attachObservers()` are NOT_CONFIGURED — no Chrome extension runtime
   or DOM available here, and no reachable VPS for the device-auth
   handshake
-- `packages/core` (all of Phases 2-6's stores): **in-memory only** - no
+- `packages/core` (all of Phases 2-7's stores): **in-memory only** - no
   repository layer connects any of it to `packages/database` yet. This
-  is now the **fifth consecutive phase** to defer persistence, flagged
-  again as worth addressing together rather than a sixth time
+  is now the **sixth consecutive phase** to defer persistence, flagged
+  again as worth addressing together rather than a seventh time
 - `RpcManager` has zero real RPC provider URLs configured - no
   Alchemy/Infura/etc. API keys exist in this environment
 - No indexer/explorer API integration for `reconcile()` - the shape
@@ -130,7 +152,7 @@ detail.
   resolves to the NOT_CONFIGURED stub
 - `EligibilityEngine`'s satisfaction check is minimum/maximum/chain-
   threshold only - duration-based requirements not yet computed
-- No API route exposes the kernel or any Phase 3/4/5/6 store yet
+- No API route exposes the kernel or any Phase 3/4/5/6/7 store yet
 - `apps/worker`: only a placeholder heartbeat queue
 - Rate limiting: single global limiter only
 - Gas/volume/frequency/active-days/unique-contracts aggregation
@@ -140,6 +162,14 @@ detail.
   regression-pause signal
 - `detectCaptchaType()` is a name-only heuristic against
   caller-supplied page signals, not a real DOM/page inspector
+- **Phase 7, new this session:** `checkDomain()` has no live DNS/WHOIS/
+  reputation service (offline heuristics only); `ContractIntelligenceReport`
+  is NOT_CONFIGURED unless a caller-supplied real source is connected
+  (no explorer/indexer/bytecode-analysis integration exists); no real
+  simulation engine feeds `checkSimulationFreshness()`; no wallet-signing
+  integration exists, so `runFirewall()` structurally never reaches
+  SUBMIT/VERIFY; Phase 7 modules are not wired into `apps/api`,
+  `apps/local-agent`, or `apps/extension` yet
 
 ## Known bugs / security issues
 ### Phase 1 (fixed via live-DB verification against real Postgres)
@@ -174,55 +204,86 @@ absent.
    Found by running the full-repo typecheck baseline before writing
    anything new, per the "verify prior claims" contract.
 
+### Phase 7
+No bugs found in what was built this phase - like Phase 5, the entire
+transaction-firewall/EIP-7702/claim-security layer remains untested
+against a live chain, real wallet signing, a real block explorer, or a
+real domain-reputation service, so integration-level bugs (real
+simulation error shapes, real bytecode analysis edge cases, real
+7702 authorization encoding quirks) remain unverified by construction,
+not because they were checked and found absent. A test-quality note:
+`decidePolicy()`'s `FACTOR_TO_BLOCK_REASON` maps both
+`LOW_REPUTATION_CONTRACT` and `PHISHING` risk factors to the same
+`PHISHING` block reason - intentional (both represent "this is
+malicious," not two different reasons), but worth flagging since it
+means `blockReasons` won't always have a 1:1 count with `factors`.
+
 Caveats still open:
 - Concurrent-refresh races and kernel-to-DB persistence races remain
   unverified (Phase 1/2)
 - Phase 2 was previously built once already (commit `f7db4b2`) and
   reverted (`df172d1`) with no reason recorded in that revert's commit
   message
-- Phase 3/4/5/6's in-memory stores are untested against realistic data
-  volumes or concurrent writers
+- Phase 3/4/5/6/7's in-memory stores are untested against realistic
+  data volumes or concurrent writers
 - Phase 6's `apps/local-agent`/`apps/extension` wiring has never run
   against a real browser, VPS, or Chrome runtime — only the pure logic
   underneath has been exercised
+- Phase 7's domain-protection heuristics (typosquatting edit-distance,
+  homoglyph map) are a best-effort offline approximation, not a
+  substitute for a real reputation/DNS service - the module documents
+  this limitation itself
 
 ## Migrations
 - `0000_tearful_rafael_vega.sql` - 13 Phase 1 tables
 - `0001_mixed_sister_grimm.sql` - Phase 2 tables
 - `0002_majestic_red_ghost.sql` - `agent_label_seq`
-No new migration in Phase 3, 4, 5, or 6 (all defer persistence - see
+No new migration in Phase 3, 4, 5, 6, or 7 (all defer persistence - see
 Partial/not-configured).
 
 ## API routes
 `GET /health`, `GET /readiness`, `POST /auth/register`,
 `POST /auth/login`, `POST /auth/refresh`, `POST /auth/revoke`,
 `GET /devices`, `POST /devices/transition`. No kernel- or Phase
-3/4/5/6-backed routes exist yet.
+3/4/5/6/7-backed routes exist yet.
 
 ## Environment variables
 API: `NODE_ENV`, `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`,
 `JWT_REFRESH_SECRET`, `ACCESS_TOKEN_TTL_SECONDS`,
 `REFRESH_TOKEN_TTL_SECONDS`, `API_HOST`, `API_PORT`, `RATE_LIMIT_MAX`,
 `RATE_LIMIT_WINDOW_MS`, `POSTGRES_PASSWORD`.
-`apps/local-agent` (new this phase): `VPS_API_URL`, `DEVICE_ID`,
-`DEVICE_REFRESH_TOKEN`, `AGENT_VERSION` - fail-closed via zod, no
-insecure defaults. Real RPC provider URLs will still be needed once
-Phase 5's network calls are wired up.
+`apps/local-agent`: `VPS_API_URL`, `DEVICE_ID`, `DEVICE_REFRESH_TOKEN`,
+`AGENT_VERSION` - fail-closed via zod, no insecure defaults. Real RPC
+provider URLs will still be needed once Phase 5's network calls are
+wired up. Phase 7 introduces no new environment variables - it is
+pure decision logic with no external service configuration of its own
+(future adapters that feed it real RPC/explorer/DNS data will need
+their own env vars when built).
 
 ## Required external integrations
 RPC providers per chain (Alchemy/Infura/self-hosted): **NOT_CONFIGURED**.
-Block explorers/indexers: **NOT_CONFIGURED**. Playwright browser
-binaries: **NOT_CONFIGURED**. Live VPS endpoint: **NOT_CONFIGURED**.
-Chrome extension runtime (to load/test `manifest.json`):
-**NOT_CONFIGURED**. Phase 8+ will need Discord/X/Telegram/GitHub API
-credentials: **NOT_CONFIGURED**.
+Block explorers/indexers (also needed for Phase 7 contract
+intelligence): **NOT_CONFIGURED**. Playwright browser binaries:
+**NOT_CONFIGURED**. Live VPS endpoint: **NOT_CONFIGURED**. Chrome
+extension runtime (to load/test `manifest.json`): **NOT_CONFIGURED**.
+Domain-reputation/DNS/WHOIS service (for real-time Phase 7 domain
+protection): **NOT_CONFIGURED**. Wallet-signing integration (for Phase
+7's SIGN/SUBMIT/VERIFY stages): **NOT_CONFIGURED** — by design,
+sensitive signing stays user-controlled. Phase 8+ will need
+Discord/X/Telegram/GitHub API credentials: **NOT_CONFIGURED**.
 
 ## Next-phase dependencies
-Phase 6's `WorkflowStore`/`WorkflowRunner`, `CheckpointManager`, and
-`BrowserSessionManager` are the natural foundation for whichever phase
-first wires a real Playwright browser or Chrome runtime end-to-end, and
-for the still-deferred persistence phase (now five phases running
-in-memory-only).
+Phase 7's `runFirewall()`, `verifyClaimSecurity()`, and
+`evaluateEip7702()` are the natural gate for whichever phase first
+wires a real RPC provider, block explorer, or wallet-signing flow —
+none of those integrations should bypass this firewall once they
+exist. `scanForPromptInjection()` is ready for Phase 8's
+Discord/X/Telegram/GitHub content ingestion. Phase 6's
+`WorkflowStore`/`WorkflowRunner`, `CheckpointManager`, and
+`BrowserSessionManager` remain the natural foundation for whichever
+phase first wires a real Playwright browser or Chrome runtime
+end-to-end. The still-deferred persistence phase (now six phases
+running in-memory-only) remains the largest open architectural item.
 
 ## Exact recommended next action
 1. On a machine with Docker: `docker compose up -d`, then
@@ -240,7 +301,13 @@ in-memory-only).
    complete the `CHROME_EXTENSION` device-auth handshake
    (`authenticateDevice()`) against a live VPS API.
 4. If/when real RPC provider credentials become available, wire a real
-   `ethers`/`viem` client behind `RpcManager.selectProvider()`'s output.
-5. Consider a dedicated persistence phase to connect
-   `packages/core`'s five phases of in-memory stores to
-   `packages/database`, rather than deferring a sixth time.
+   `ethers`/`viem` client behind `RpcManager.selectProvider()`'s output,
+   then feed real simulation/block data into Phase 7's
+   `checkSimulationFreshness()`/`assessRisk()` instead of caller-supplied
+   stand-ins.
+5. If/when a block-explorer/indexer API key becomes available, wire it
+   behind `buildContractIntelligenceReport()`'s `sourceConnected: true`
+   path so contract checks stop defaulting to NOT_CONFIGURED.
+6. Consider a dedicated persistence phase to connect `packages/core`'s
+   six phases of in-memory stores to `packages/database`, rather than
+   deferring a seventh time.
