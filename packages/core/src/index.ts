@@ -102,3 +102,20 @@ export * from "./tx/antiSybil.js";
 export * from "./tx/emergencyStop.js";
 export * from "./tx/promptInjection.js";
 export * from "./tx/firewall.js";
+
+/**
+ * Phase 8: Airdrop coverage / off-chain intelligence / plugins.
+ * All adapters registered here are MOCK — no live Discord/X/Telegram/
+ * GitHub/quest/DePIN/AI-compute/GameFi/prediction/referral/ambassador/
+ * exchange/waitlist/learn-to-earn credentials exist in this sandbox,
+ * so every IntegrationProvider starts and stays NOT_CONFIGURED until a
+ * real integration explicitly reports otherwise. Plugin SDK: unknown
+ * plugins are always DISABLED; activation never grants a permission
+ * beyond what the plugin's own manifest requested.
+ */
+export const PHASE8_STATUS = "IMPLEMENTED" as const;
+
+export * from "./integrations/integrationRegistry.js";
+export * from "./adapters/mockOffChainAdapter.js";
+export * from "./adapters/phase8Adapters.js";
+export * from "./plugins/pluginSdk.js";

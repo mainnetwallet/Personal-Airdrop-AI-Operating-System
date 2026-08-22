@@ -1327,3 +1327,65 @@ export interface PromptInjectionScanResult {
   suspicious: boolean;
   scannedAt: string;
 }
+
+// ---------------------------------------------------------------------
+// Phase 8 — Off-chain intelligence integrations / broad adapters / Plugin SDK
+// ---------------------------------------------------------------------
+
+// External services Phase 8's adapters read from. None have real
+// credentials in this sandbox — every provider starts and stays
+// NOT_CONFIGURED until a real integration wires it up (see
+// @airdrop-os/core IntegrationRegistry).
+export type IntegrationProvider =
+  | "DISCORD" | "X" | "TELEGRAM" | "GITHUB" | "QUEST_PLATFORM"
+  | "DEPIN_NETWORK" | "AI_COMPUTE_PLATFORM" | "GAMEFI_PLATFORM"
+  | "PREDICTION_TRADING_PLATFORM" | "REFERRAL_PLATFORM"
+  | "AMBASSADOR_PLATFORM" | "EXCHANGE" | "WAITLIST_PLATFORM"
+  | "LEARN_PLATFORM";
+
+// Reuses the same status vocabulary as IntegrationHealthState /
+// ContractIntelligenceReport.status — one health vocabulary across the
+// whole system rather than a Phase-8-specific one.
+export interface IntegrationState {
+  provider: IntegrationProvider;
+  status: IntegrationHealthState;
+  detail: string;
+  lastCheckedAt: string;
+}
+
+// Off-chain coverage category an adapter belongs to (Phase 8 spec).
+export type OffChainCategory =
+  | "DISCORD_INTELLIGENCE" | "SOCIAL_INTELLIGENCE" | "QUEST"
+  | "DEVELOPER" | "DEPIN" | "AI_COMPUTE" | "GAMING_GAMEFI"
+  | "PREDICTION_TRADING" | "REFERRAL" | "AMBASSADOR_CREATOR"
+  | "EXCHANGE" | "WAITLIST_BETA" | "LEARN_TO_EARN";
+
+// --- Plugin SDK (third-party adapters run sandboxed) ---
+
+export type PluginPermission =
+  | "READ_PROJECT" | "READ_EVIDENCE" | "WRITE_TASK" | "NETWORK_FETCH" | "READ_WALLET_METADATA";
+
+// An unknown/unregistered plugin resolves to DISABLED — there is no
+// code path that treats "not yet checked" as safe to run.
+export type PluginRuntimeStatus = "DISABLED" | "SANDBOXED_ACTIVE" | "BLOCKED";
+
+export interface PluginManifest {
+  pluginId: string;
+  name: string;
+  version: string;
+  integrityHash: string;
+  requestedPermissions: PluginPermission[];
+  networkAllowlist: string[];
+  maxCallsPerRun: number;
+}
+
+export interface PluginRegistration {
+  manifest: PluginManifest;
+  status: PluginRuntimeStatus;
+  // Never a superset of manifest.requestedPermissions, even if the
+  // activator tries to grant more.
+  grantedPermissions: PluginPermission[];
+  registeredAt: string;
+  lastHealthCheckAt: string | null;
+  blockedReason: string | null;
+}

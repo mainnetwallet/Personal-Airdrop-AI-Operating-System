@@ -1,6 +1,6 @@
 # CURRENT STATE — Personal Airdrop AI Operating System V12
 
-Last updated: end of Phase 7.
+Last updated: end of Phase 8.
 
 ## Current architecture
 pnpm monorepo. Fastify API + Drizzle/Postgres + Redis/BullMQ backend.
@@ -29,15 +29,24 @@ persistence or the API:
   lock), anti-Sybil awareness (never bypasses), emergency stop
   (read-only investigation always allowed), prompt-injection scanner
   for untrusted web/Discord/X/Telegram/GitHub/quest/contract content
+- Phase 8: `IntegrationRegistry` (per-provider CONNECTED/DEGRADED/
+  NOT_CONFIGURED/EXPIRED/REVOKED/BLOCKED status for 14 external
+  services), generic mock off-chain `AirdropAdapter` factory + 13
+  category-group registration (Discord, social, quest, developer,
+  DePIN, AI/compute, gaming/GameFi, prediction/trading — no autonomous
+  trading, referral, ambassador/creator, exchange — no auto-execute,
+  waitlist/beta, learn-to-earn), Plugin SDK (`PluginRegistry`: unknown
+  plugin DISABLED by default, activation never grants a permission
+  beyond the plugin's own manifest, integrity-hash mismatch BLOCKs)
 
 `apps/local-agent` and `apps/extension` are real, tested wiring around
 Phase 6's core logic (job auth, session isolation, checkpoints, safe
 event redaction, teach sessions) but NOT_CONFIGURED for live execution —
 no Playwright browser, no reachable VPS, no Chrome runtime in this
 sandbox. `apps/web` and `apps/android` are still empty scaffolds. Phase
-7's transaction firewall is not yet wired into either app or into
-`apps/api` — see Next-phase dependencies. See `docs/phases/PHASE-1.md`
-through `PHASE-7.md` for full detail.
+7's transaction firewall and Phase 8's off-chain adapters are not yet
+wired into either app or into `apps/api` — see Next-phase dependencies.
+See `docs/phases/PHASE-1.md` through `PHASE-8.md` for full detail.
 
 ## Completed / tested (this sandbox)
 - Monorepo scaffold, fail-closed config loading
@@ -112,15 +121,51 @@ through `PHASE-7.md` for full detail.
     immediately before SIGN; never reaches SUBMIT/VERIFY in this
     sandbox — a fully clean run stops at SIGN with NEEDS_USER_REVIEW
     because signing is user-controlled by contract, never automated
+- **Phase 8 (new this session):**
+  - `IntegrationRegistry` (`packages/core/src/integrations/`):
+    per-provider CONNECTED/DEGRADED/NOT_CONFIGURED/EXPIRED/REVOKED/
+    BLOCKED status for the 14 external services Phase 8 names; every
+    provider starts and stays NOT_CONFIGURED until a caller explicitly
+    calls `setStatus()` — no inference path to CONNECTED
+  - `createMockOffChainAdapter()` (`packages/core/src/adapters/`): a
+    generic factory implementing the existing Phase 3 `AirdropAdapter`
+    contract; `calculateEligibility()` always `UNKNOWN`, `claim()`
+    always `NOT_CONFIGURED` — mock adapters never fabricate
+    eligibility or auto-claim
+  - `registerPhase8Adapters()`: registers a mock adapter for every
+    `AirdropType` across 13 category groups (Discord, social, quest,
+    developer, DePIN, AI/compute, gaming/GameFi, prediction/trading —
+    no autonomous trading capability anywhere in the adapter,
+    referral, ambassador/creator, exchange — no auto-execute, waitlist/
+    beta, learn-to-earn)
+  - Plugin SDK (`packages/core/src/plugins/pluginSdk.ts`):
+    `PluginRegistry` — a newly registered plugin is always DISABLED;
+    `activate()` only succeeds on an exact integrity-hash match
+    (mismatch -> BLOCKED) and grants only
+    `requestedPermissions ∩ grantPermissions`, never a permission
+    outside what the plugin's own manifest requested; unknown
+    `pluginId` resolves to a fixed DISABLED registration
 - Typecheck clean across all 12 packages/apps that have a `typecheck`
-  script (`apps/web`, `apps/android` don't); **304/304**
-  `@airdrop-os/core` tests passing (233 Phase 1-6 + 71 new Phase 7),
+  script (`apps/web`, `apps/android` don't); **321/321**
+  `@airdrop-os/core` tests passing (304 Phase 1-7 + 17 new Phase 8),
   plus **14/14** `apps/extension` tests (unchanged); 253 tests passing
   repo-wide outside `packages/core` and excluding the live-DB-only auth
-  suite (unchanged from Phase 6), for 304+253=557 total non-live-DB
+  suite (unchanged from Phase 6/7), for 321+253=574 total non-live-DB
   tests passing repo-wide
 
 ## Partial / mocked / not-configured
+- All 14 Phase 8 `IntegrationProvider`s (`DISCORD`, `X`, `TELEGRAM`,
+  `GITHUB`, `QUEST_PLATFORM`, `DEPIN_NETWORK`, `AI_COMPUTE_PLATFORM`,
+  `GAMEFI_PLATFORM`, `PREDICTION_TRADING_PLATFORM`,
+  `REFERRAL_PLATFORM`, `AMBASSADOR_PLATFORM`, `EXCHANGE`,
+  `WAITLIST_PLATFORM`, `LEARN_PLATFORM`): **NOT_CONFIGURED** — no real
+  credentials exist in this environment
+- Phase 8's off-chain adapters and Plugin SDK are not wired into
+  `apps/api`, `apps/worker`, `apps/local-agent`, or `apps/extension`
+  yet — `packages/core` library only, same as Phases 2-7
+- Plugin SDK has no actual sandboxed execution runtime (process
+  isolation, resource-limit enforcement) — it is the registration/
+  authorization/permission-intersection layer only
 - `/auth/*` routes exercised against a real local Postgres/Redis in a
   prior session (see Known bugs) - `/devices/*` still not run against
   a live DB. This sandbox has no Docker, so the 3 live-DB `auth`
@@ -137,10 +182,10 @@ through `PHASE-7.md` for full detail.
   `attachObservers()` are NOT_CONFIGURED — no Chrome extension runtime
   or DOM available here, and no reachable VPS for the device-auth
   handshake
-- `packages/core` (all of Phases 2-7's stores): **in-memory only** - no
+- `packages/core` (all of Phases 2-8's stores): **in-memory only** - no
   repository layer connects any of it to `packages/database` yet. This
-  is now the **sixth consecutive phase** to defer persistence, flagged
-  again as worth addressing together rather than a seventh time
+  is now the **seventh consecutive phase** to defer persistence,
+  flagged again as worth addressing together rather than an eighth
 - `RpcManager` has zero real RPC provider URLs configured - no
   Alchemy/Infura/etc. API keys exist in this environment
 - No indexer/explorer API integration for `reconcile()` - the shape
