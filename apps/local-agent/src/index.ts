@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import puppeteer, { type Browser } from "puppeteer-core";
 import {
   PcAgentAuthorizer,
   BrowserSessionManager,
@@ -52,23 +53,49 @@ export class LocalAgent {
   readonly authorizer = new PcAgentAuthorizer();
   readonly sessions = new BrowserSessionManager();
   readonly checkpoints: CheckpointManager;
+  private browser: Browser | null = null;
 
-  constructor(private readonly deviceId: string, private readonly agentVersion: string, schemaVersion = 1) {
+  constructor(
+    private readonly deviceId: string,
+    private readonly agentVersion: string,
+    private readonly chromiumPath: string | undefined = undefined,
+    schemaVersion = 1,
+  ) {
     this.checkpoints = new CheckpointManager({ schemaVersion, agentVersion, workflowVersion: null });
   }
 
-  /** Real wiring point for connecting to the VPS. NOT_CONFIGURED here
-   * because no VPS is reachable from this sandbox - see the module
-   * docstring for what a real implementation does. */
+  /** Real wiring point for connecting to the VPS. Still NOT_CONFIGURED:
+   * this requires a running VPS-side agent process (WebSocket/HTTP auth
+   * against /auth/refresh + /devices) that does not exist yet in this
+   * repo. Wiring the browser locally (below) does not require this. */
   async connectToVps(): Promise<never> {
     throw new NotConfiguredError("VPS connection");
   }
 
-  /** Real wiring point for launching a Playwright-controlled browser.
-   * NOT_CONFIGURED here because Playwright's browser binaries cannot be
-   * downloaded in this sandbox's network configuration. */
-  async launchBrowser(_isolation: BrowserIsolationKey, _mode: BrowserMode): Promise<never> {
-    throw new NotConfiguredError("Playwright browser automation");
+  /** Launches a locally installed Chromium (e.g. Termux's `pkg install
+   * chromium` on Android) via puppeteer-core. Requires CHROMIUM_PATH to
+   * be set explicitly - fails closed rather than guessing a binary
+   * path. `--no-sandbox` is required because Termux has no setuid
+   * sandbox helper; this narrows isolation guarantees versus desktop
+   * Chromium, which is a real tradeoff to be aware of, not a formality. */
+  async launchBrowser(_isolation: BrowserIsolationKey, _mode: BrowserMode): Promise<Browser> {
+    if (!this.chromiumPath) {
+      throw new NotConfiguredError("Browser automation (CHROMIUM_PATH not set)");
+    }
+    if (this.browser) return this.browser;
+    this.browser = await puppeteer.launch({
+      executablePath: this.chromiumPath,
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    });
+    return this.browser;
+  }
+
+  async closeBrowser(): Promise<void> {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+    }
   }
 
   reportHealth(now: number = Date.now()): LocalAgentHealth {
@@ -76,8 +103,8 @@ export class LocalAgent {
       agentVersion: this.agentVersion,
       deviceId: this.deviceId,
       vpsConnection: "NOT_CONFIGURED",
-      browserAutomation: "NOT_CONFIGURED",
-      activeSessions: 0,
+      browserAutomation: this.chromiumPath ? "READY" : "NOT_CONFIGURED",
+      activeSessions: this.browser ? 1 : 0,
       reportedAt: new Date(now).toISOString(),
     };
   }
@@ -85,9 +112,11 @@ export class LocalAgent {
 
 if (process.env.NODE_ENV !== "test") {
   const config = loadLocalAgentConfig();
-  const agent = new LocalAgent(config.DEVICE_ID, config.AGENT_VERSION);
+  const agent = new LocalAgent(config.DEVICE_ID, config.AGENT_VERSION, config.CHROMIUM_PATH);
   console.log(`[local-agent] started for device ${config.DEVICE_ID}. Health:`, agent.reportHealth());
-  console.log("[local-agent] VPS connection and browser automation are NOT_CONFIGURED - see src/index.ts.");
+  if (!config.CHROMIUM_PATH) {
+    console.log("[local-agent] CHROMIUM_PATH not set - browser automation NOT_CONFIGURED. VPS connection is always NOT_CONFIGURED (unimplemented).");
+  }
 }
 
 export const newAgentJobId = () => randomUUID();

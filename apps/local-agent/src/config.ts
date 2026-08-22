@@ -13,6 +13,12 @@ const envSchema = z.object({
   DEVICE_ID: z.string().min(1, "DEVICE_ID is required"),
   DEVICE_REFRESH_TOKEN: z.string().min(1, "DEVICE_REFRESH_TOKEN is required"),
   AGENT_VERSION: z.string().default("0.1.0"),
+  // Optional: path to a locally installed Chromium binary (e.g. Termux's
+  // `pkg install chromium` on Android, or a system Chromium on Linux).
+  // When unset, launchBrowser() stays NOT_CONFIGURED rather than guessing
+  // a path, since a wrong guess would silently fail closed in a
+  // confusing way.
+  CHROMIUM_PATH: z.string().optional(),
 });
 
 export type LocalAgentEnv = z.infer<typeof envSchema>;

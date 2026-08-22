@@ -6,6 +6,7 @@
   "dependencies": {
     "@airdrop-os/core": "workspace:*",
     "@airdrop-os/types": "workspace:*",
+    "puppeteer-core": "^23.5.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
