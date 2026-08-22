@@ -10,12 +10,13 @@
   },
   "devDependencies": {
     "drizzle-kit": "^0.24.2",
-    "tsx": "^4.16.5"
+    "tsx": "^4.16.5",
+    "dotenv-cli": "^7.4.2"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json",
     "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
-    "db:migrate": "tsx src/migrate.ts"
+    "db:migrate": "dotenv -e ../../.env -- tsx src/migrate.ts"
   }
 }
