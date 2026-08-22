@@ -842,3 +842,216 @@ export interface OpportunityScoreResult {
   breakdown: Record<string, number>;
   confidence: ClaimConfidence;
 }
+
+// ============================================================
+// Phase 6: Browser / PC Agent / Extension / Workflow / Checkpoint
+// ============================================================
+
+export type BrowserMode = "CONTROLLED_BROWSER" | "USER_BROWSER_EXTENSION";
+
+/** A device-scoped job the VPS explicitly authorized the PC agent to run.
+ * Authorization always expires; a PC agent must never treat an expired
+ * or revoked job as valid. */
+export type JobAuthorizationStatus = "ACTIVE" | "EXPIRED" | "REVOKED" | "COMPLETED";
+
+export interface DeviceJobAuthorization {
+  jobId: string;
+  deviceId: string;
+  agentId: string;
+  scope: string[]; // permission scope names, e.g. ["BROWSER", "READ"]
+  issuedAt: string;
+  expiresAt: string;
+  status: JobAuthorizationStatus;
+}
+
+/** Sessions are isolated so state from one project/wallet/profile never
+ * bleeds into another. Two sessions are the "same" session only if every
+ * field of the isolation key matches. */
+export interface BrowserIsolationKey {
+  projectId: string | null;
+  campaignId: string | null;
+  missionId: string | null;
+  wallet: string | null;
+  account: string | null;
+  browserProfile: string | null;
+  chain: string | null;
+  deviceId: string;
+}
+
+export type BrowserSessionStatus = "OPEN" | "PAUSED" | "CLOSED" | "CRASHED";
+
+export interface BrowserSession {
+  sessionId: string;
+  mode: BrowserMode;
+  isolation: BrowserIsolationKey;
+  status: BrowserSessionStatus;
+  openedAt: string;
+  closedAt: string | null;
+}
+
+/** Browser events store ONLY safe metadata. Field VALUES that look like
+ * secrets (password, seed phrase, private key, OTP, 2FA, recovery code,
+ * payment credential, session token) must never appear here - only the
+ * fact that a sensitive field was present and redacted. */
+export type BrowserEventSensitivity = "SAFE" | "REDACTED";
+
+export interface BrowserEvent {
+  eventId: string;
+  sessionId: string;
+  timestamp: string;
+  url: string;
+  title: string | null;
+  eventType: "NAVIGATION" | "CLICK" | "INPUT" | "SUBMIT" | "OBSERVATION";
+  elementMetadata: Record<string, string | number | boolean | null> | null;
+  action: string | null;
+  projectId: string | null;
+  campaignId: string | null;
+  missionId: string | null;
+  taskId: string | null;
+  wallet: string | null;
+  account: string | null;
+  chain: string | null;
+  sensitivity: BrowserEventSensitivity;
+  confidence: ClaimConfidence;
+  redactedFields: string[];
+}
+
+// --- Workflow engine ---
+
+export interface WorkflowVariable {
+  name: string;
+  kind: "wallet" | "account" | "chain" | "token" | "amount" | "contract" | "quest" | "project" | "campaign" | "network" | "browserProfile" | "device";
+}
+
+export interface WorkflowCondition {
+  variable: string;
+  operator: "equals" | "notEquals" | "exists" | "notExists";
+  value?: string;
+}
+
+export type WorkflowGateType = "NONE" | "HUMAN_GATE" | "APPROVAL_GATE";
+
+export interface WorkflowStep {
+  stepId: string;
+  name: string;
+  dependsOn: string[]; // stepIds that must succeed first
+  conditions: WorkflowCondition[];
+  expectedOutput: string | null;
+  gate: WorkflowGateType;
+  onFailure: "STOP" | "RETRY" | "SKIP" | "HUMAN_REVIEW";
+}
+
+export interface WorkflowDefinitionInput {
+  name: string;
+  goal: string;
+  steps: WorkflowStep[];
+  variables: WorkflowVariable[];
+}
+
+export interface WorkflowVersionRecord {
+  workflowId: string;
+  version: number; // 1, 2, 3... never overwritten
+  label: string; // e.g. "V1"
+  definition: WorkflowDefinitionInput;
+  createdAt: string;
+  supersedes: number | null;
+  derivedFromRunStats?: { successCount: number; failureCount: number; avgTimeMs: number; avgCost: number };
+}
+
+export type WorkflowRunStatus =
+  | "PENDING" | "RUNNING" | "WAITING_FOR_APPROVAL" | "WAITING_FOR_USER"
+  | "PAUSED_REGRESSION" | "COMPLETED" | "FAILED" | "BLOCKED";
+
+export interface WorkflowStepResult {
+  stepId: string;
+  status: "PENDING" | "SUCCESS" | "FAILED" | "SKIPPED";
+  output: string | null;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface WorkflowRun {
+  runId: string;
+  workflowId: string;
+  version: number;
+  status: WorkflowRunStatus;
+  stepResults: WorkflowStepResult[];
+  startedAt: string;
+  finishedAt: string | null;
+  checkpointId: string | null;
+}
+
+// --- Teach agent ---
+
+export type TeachDecision = "SAVE" | "EDIT" | "DISCARD";
+
+export interface TaughtWorkflowDraft {
+  draftId: string;
+  observedSessionId: string;
+  goal: string;
+  steps: WorkflowStep[];
+  successCriteria: string[];
+  failureCriteria: string[];
+  manualInterventionPoints: string[];
+  estimatedTimeMs: number;
+  estimatedCost: number;
+  confidence: ClaimConfidence;
+  decision: TeachDecision | null;
+}
+
+// --- Checkpoint ---
+
+export type CheckpointCompatibility = "COMPATIBLE" | "INCOMPATIBLE";
+
+export interface CheckpointVersions {
+  schemaVersion: number;
+  agentVersion: string;
+  workflowVersion: number | null;
+}
+
+export interface CheckpointRecord {
+  checkpointId: string;
+  sessionId: string | null;
+  runId: string | null;
+  label: string; // e.g. "BEFORE_CLAIM", "AFTER_STAKE"
+  versions: CheckpointVersions;
+  safeState: Record<string, unknown>; // never secrets
+  createdAt: string;
+}
+
+// --- CAPTCHA handoff ---
+
+export type CaptchaType = "RECAPTCHA" | "HCAPTCHA" | "TURNSTILE" | "CLOUDFLARE_CHALLENGE" | "HUMAN_VERIFICATION";
+
+export type CaptchaStatus =
+  | "NONE" | "DETECTED" | "PAUSED" | "CHECKPOINTED"
+  | "AWAITING_USER" | "USER_COMPLETED" | "VERIFIED" | "RESUMED" | "TIMED_OUT";
+
+export interface CaptchaEvent {
+  captchaId: string;
+  sessionId: string;
+  type: CaptchaType;
+  status: CaptchaStatus;
+  detectedAt: string;
+  checkpointId: string | null;
+  resolvedAt: string | null;
+}
+
+// --- Recovery ---
+
+export type RecoveryTrigger =
+  | "BROWSER_CRASH" | "PC_RESTART" | "NETWORK_FAILURE" | "RPC_FAILURE" | "SESSION_EXPIRY";
+
+export type RecoveryOutcome = "RESUMED" | "BLOCKED_INCOMPATIBLE_CHECKPOINT" | "BLOCKED_NO_CHECKPOINT" | "BLOCKED_VERIFICATION_FAILED";
+
+export interface RecoveryEvent {
+  recoveryId: string;
+  trigger: RecoveryTrigger;
+  sessionId: string | null;
+  runId: string | null;
+  checkpointId: string | null;
+  outcome: RecoveryOutcome;
+  detectedAt: string;
+  resolvedAt: string | null;
+}

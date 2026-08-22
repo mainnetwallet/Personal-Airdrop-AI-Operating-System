@@ -1,5 +1,20 @@
 {
   "name": "@airdrop-os/local-agent",
   "version": "0.1.0",
-  "private": true
+  "private": true,
+  "main": "src/index.ts",
+  "dependencies": {
+    "@airdrop-os/core": "workspace:*",
+    "@airdrop-os/types": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.5",
+    "typescript": "^5.5.4"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  }
 }

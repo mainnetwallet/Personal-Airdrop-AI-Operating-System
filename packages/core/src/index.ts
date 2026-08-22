@@ -58,3 +58,22 @@ export * from "./chain/historicalState.js";
 export * from "./chain/snapshotProof.js";
 export * from "./chain/points.js";
 export * from "./chain/opportunityRadar.js";
+
+/**
+ * Phase 6: Browser / PC Agent / Extension / Workflow / Checkpoint.
+ * Like Phases 2-5, this is pure state-management logic, fully unit
+ * tested, and not yet wired to a live Playwright browser, a real Chrome
+ * extension runtime, or persistence - `apps/local-agent` and
+ * `apps/extension` remain NOT_CONFIGURED for live execution in this
+ * sandbox (no display, no real device/VPS connection available here).
+ */
+export const AGENT_STATUS = "IMPLEMENTED" as const;
+
+export * from "./agent/pcAgentAuth.js";
+export * from "./agent/browserSession.js";
+export * from "./agent/browserEvent.js";
+export * from "./agent/checkpoint.js";
+export * from "./agent/workflow.js";
+export * from "./agent/teachAgent.js";
+export * from "./agent/captcha.js";
+export * from "./agent/recovery.js";

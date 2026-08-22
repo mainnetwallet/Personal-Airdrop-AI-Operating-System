@@ -60,7 +60,24 @@ importers:
 
   apps/extension: {}
 
-  apps/local-agent: {}
+  apps/local-agent:
+    dependencies:
+      '@airdrop-os/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@airdrop-os/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      tsx:
+        specifier: ^4.16.5
+        version: 4.23.12
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
 
   apps/web: {}
 
