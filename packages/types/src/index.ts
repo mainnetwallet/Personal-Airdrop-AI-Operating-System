@@ -464,3 +464,191 @@ export interface AirdropAdapter {
   claim(project: Project): AdapterClaimResult;
   report(project: Project): AdapterReport;
 }
+
+// ---------------------------------------------------------------------
+// Phase 4 — Requirement / Identity / Mission / Task / Eligibility
+// ---------------------------------------------------------------------
+
+export type RequirementType =
+  | "SOCIAL" | "QUEST" | "ONCHAIN" | "TESTNET" | "RESEARCH" | "GOVERNANCE"
+  | "NFT" | "STAKING" | "LIQUIDITY" | "BRIDGE" | "SWAP" | "CLAIM" | "FAUCET"
+  | "FEEDBACK" | "HOLDING" | "VOLUME" | "DURATION" | "REFERRAL" | "OTHER";
+
+export type RequirementStatus = "ACTIVE" | "SUPERSEDED" | "EXPIRED" | "RETRACTED";
+
+// Every requirement row is one version. History is never overwritten:
+// superseding a requirement closes the current version's validUntil
+// and appends a new version with supersedesVersion pointing back to
+// it. See @airdrop-os/core requirement.ts.
+export interface Requirement {
+  requirementId: string;
+  projectId: string;
+  campaignId: string | null;
+  seasonId: string | null;
+  epochId: string | null;
+  type: RequirementType;
+  description: string;
+  source: string;
+  evidence: string[];
+  confidence: ClaimConfidence;
+  status: RequirementStatus;
+  deadline: string | null;
+  minimum: number | null;
+  maximum: number | null;
+  wallet: string | null;
+  account: string | null;
+  chain: string | null;
+  activity: string | null;
+  duration: string | null;
+  volume: number | null;
+  snapshot: string | null;
+  version: number;
+  validFrom: string;
+  validUntil: string | null;
+  supersedesVersion: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AccountType =
+  | "WALLET" | "X_ACCOUNT" | "DISCORD_ACCOUNT" | "TELEGRAM_ACCOUNT"
+  | "GITHUB_ACCOUNT" | "QUEST_ACCOUNT" | "EXCHANGE_ACCOUNT" | "EMAIL_ACCOUNT"
+  | "GAME_ACCOUNT";
+
+export type AssociationState = "USER_CONFIRMED" | "KNOWN" | "OBSERVED" | "UNCERTAIN";
+
+// USER -> account edges. Never silently merged: associating an
+// (accountType, accountRef) already linked to a different userId
+// throws rather than reassigning ownership (see @airdrop-os/core
+// identityGraph.ts).
+export interface IdentityAssociation {
+  associationId: string;
+  userId: string;
+  accountType: AccountType;
+  accountRef: string;
+  state: AssociationState;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WalletLabel = "MAIN" | "TESTNET" | "EXPERIMENTAL" | "DEFI" | "NFT" | "RESEARCH";
+export type WalletStatus = "ACTIVE" | "WATCHING" | "RETIRED" | "COMPROMISED";
+
+export interface Wallet {
+  walletId: string;
+  address: string;
+  label: WalletLabel;
+  chains: string[];
+  status: WalletStatus;
+  createdAt: string;
+}
+
+export type TaskType =
+  | "SOCIAL" | "QUEST" | "ONCHAIN" | "TESTNET" | "RESEARCH" | "GOVERNANCE"
+  | "NFT" | "STAKING" | "LIQUIDITY" | "BRIDGE" | "SWAP" | "CLAIM" | "FAUCET"
+  | "FEEDBACK" | "MANUAL_VERIFICATION" | "CAPTCHA_HANDOFF" | "LOGIN_HANDOFF"
+  | "2FA_HANDOFF" | "KYC_HANDOFF" | "DISCORD" | "TELEGRAM" | "GITHUB"
+  | "DEVELOPER" | "DEPIN" | "GAMING" | "REFERRAL" | "AMBASSADOR" | "SNAPSHOT"
+  | "WAITLIST" | "BETA" | "EDUCATION" | "EXCHANGE" | "CONTENT";
+
+export type TaskStatus =
+  | "BLOCKED" | "READY" | "IN_PROGRESS" | "WAITING_HUMAN" | "DONE" | "SKIPPED" | "FAILED";
+
+// Task DAG node. dependencies reference other taskIds and must already
+// exist at creation time (see @airdrop-os/core task.ts) — this makes a
+// dependency cycle structurally impossible rather than something that
+// has to be detected after the fact.
+export interface Task {
+  taskId: string;
+  missionId: string;
+  type: TaskType;
+  title: string;
+  description: string;
+  dependencies: string[];
+  conditions: string[];
+  outputs: string[];
+  requiresHumanGate: boolean;
+  requiresApprovalGate: boolean;
+  status: TaskStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MissionStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "BLOCKED" | "COMPLETED" | "ABANDONED";
+
+export type EligibilityState =
+  | "UNKNOWN" | "POSSIBLE" | "LIKELY" | "QUALIFIED" | "VERIFIED"
+  | "INELIGIBLE" | "CONFLICTED" | "EXPIRED";
+
+export interface Mission {
+  missionId: string;
+  projectId: string;
+  campaignId: string | null;
+  objective: string;
+  requirements: string[];
+  tasks: string[];
+  dependencies: string[];
+  deadline: string | null;
+  budget: number | null;
+  timeBudget: string | null;
+  risk: number | null;
+  status: MissionStatus;
+  progress: number;
+  eligibility: EligibilityState;
+  rewardSignal: number | null;
+  workflow: string | null;
+  checkpoint: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NextBestAction =
+  | "DO" | "WAIT" | "WATCH" | "SKIP" | "RESEARCH" | "HUMAN_REVIEW" | "BLOCK" | "NO_ACTION";
+
+export type UserPreferenceStance = "AGGRESSIVE" | "BALANCED" | "CONSERVATIVE";
+
+export interface NextBestActionInput {
+  eligibility: EligibilityState;
+  deadline: string | null;
+  rewardSignal: number | null;
+  cost: number | null;
+  time: number | null;
+  risk: number | null;
+  budget: number | null;
+  availability: boolean;
+  confidence: ClaimConfidence;
+  workflowMatch: boolean;
+  userPreference: UserPreferenceStance | null;
+}
+
+export interface EligibilityActivity {
+  activityId: string;
+  wallet: string | null;
+  account: string | null;
+  type: string;
+  timestamp: string;
+  block: number | null;
+  value: number | null;
+  chain: string | null;
+}
+
+// The bundle of evidence behind a computed eligibility state — always
+// traceable to the specific requirement *versions* used, per activity,
+// not just "the requirement" in the abstract.
+export interface EligibilityProofPackage {
+  projectId: string;
+  campaignId: string | null;
+  seasonId: string | null;
+  epochId: string | null;
+  wallet: string | null;
+  account: string | null;
+  requirements: { requirementId: string; version: number }[];
+  activities: EligibilityActivity[];
+  snapshot: string | null;
+  evidence: string[];
+  calculation: string;
+  confidence: ClaimConfidence;
+  unknowns: string[];
+  state: EligibilityState;
+  generatedAt: string;
+}

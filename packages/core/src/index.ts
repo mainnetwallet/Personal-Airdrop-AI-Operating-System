@@ -26,3 +26,16 @@ export * from "./campaign.js";
 export * from "./adapters/registry.js";
 export * from "./adapters/notConfiguredAdapter.js";
 export * from "./tools/researchTools.js";
+
+/**
+ * Phase 4: Requirement / Identity / Mission / Task / Eligibility.
+ */
+export const ELIGIBILITY_STATUS = "IMPLEMENTED" as const;
+
+export * from "./requirement.js";
+export * from "./identityGraph.js";
+export * from "./wallet.js";
+export * from "./task.js";
+export * from "./mission.js";
+export * from "./eligibility.js";
+export * from "./nextBestAction.js";
