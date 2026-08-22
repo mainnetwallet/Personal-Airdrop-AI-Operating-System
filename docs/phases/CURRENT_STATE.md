@@ -1,20 +1,21 @@
 # CURRENT STATE — Personal Airdrop AI Operating System V12
 
-Last updated: end of Phase 2.
+Last updated: end of Phase 3.
 
 ## Current architecture
 pnpm monorepo. Fastify API + Drizzle/Postgres + Redis/BullMQ backend.
-`packages/core` now hosts the Agent OS Kernel (state machine, event bus,
-memory, tool registry, permission enforcement, run limits) as an
-in-memory library, not yet wired to persistence or the API.
+`packages/core` hosts the Agent OS Kernel (Phase 2: state machine, event
+bus, memory, tool registry, permission enforcement, run limits) and now
+also Project/Research/Evidence/Campaign/Airdrop intelligence (Phase 3),
+all as in-memory libraries, not yet wired to persistence or the API.
 Next.js web app and PC/extension/Android agents are still scaffolded but
-empty. See `docs/phases/PHASE-1.md` and `docs/phases/PHASE-2.md` for
-full detail.
+empty. See `docs/phases/PHASE-1.md`, `PHASE-2.md`, `PHASE-3.md` for full
+detail.
 
 ## Completed / tested (this sandbox)
 - Monorepo scaffold, fail-closed config loading
 - Drizzle schema for 15 tables (13 Phase 1 + `memory_entries` +
-  `tool_registry`) + 2 generated SQL migrations
+  `tool_registry`) + 3 generated SQL migrations
 - Device trust-state machine (unit tested)
 - Secret redaction (unit tested)
 - Device-bound access/refresh token issuance + verification (unit tested)
@@ -24,7 +25,27 @@ full detail.
   corrections), tool registry, permission-scoped tool execution, run
   limits (steps/runtime/tool calls/retries/cost) — 48 unit tests
 - `TRANSACTION_APPROVAL` confirmed never implicitly granted (test-covered)
-- Typecheck clean across all 9 packages/apps; 67 tests passing repo-wide
+- Project lifecycle store (12-state machine: DISCOVERED → RESEARCHING →
+  VERIFIED → WATCHING/ACTIVE → CLAIMABLE → CLAIMED → COMPLETED, with
+  RISKY/REJECTED/EXPIRED escape hatches) — unit tested
+- Evidence graph: sources, content-hashed snapshots with diff/change
+  detection, claims, evidence with full lineage (source/URL/type/
+  retrievedAt/contentHash/knowledgeVersion), contradiction resolution
+  that always favors PRIMARY_OFFICIAL-tier evidence over community/
+  rumor tiers regardless of source count or reputation — unit tested
+- Source reputation tracker (accuracy/availability/freshness, weighting
+  signal only, cannot override primary evidence) — unit tested
+- Research engine: discover/retrieve/normalize/deduplicate/ingest/
+  verify/isStale pipeline over the evidence graph — unit tested
+- Airdrop-type classification (~80-type taxonomy, always falls back to
+  UNKNOWN_AIRDROP_TYPE, never throws/guesses) — unit tested
+- Airdrop adapter contract + registry, with a NOT_CONFIGURED stub
+  adapter whose claim() never implies automatic execution — unit tested
+- First real tool registered into the Phase 2 ToolRegistry:
+  `source.http_fetch` (declarative metadata only, no executor yet)
+- Typecheck clean across all 9 packages/apps; 94/94 @airdrop-os/core
+  tests passing (48 Phase 1–2 + 46 Phase 3), 109 tests passing repo-wide
+  excluding the live-DB-only auth suite
 
 ## Partial / mocked / not-configured
 - `/auth/*` routes have now been exercised against a real local
@@ -33,70 +54,68 @@ full detail.
   same way before trusting it in production.
 - `apps/web`, `apps/local-agent`, `apps/extension`, `apps/android`:
   NOT_CONFIGURED, workspace placeholders only
-- `packages/core` (Agent OS Kernel): **in-memory only** — no repository
-  layer connects it to `packages/database` yet; `AgentRun`/`KernelEvent`/
-  `MemoryEntry` are not persisted anywhere durable in this sandbox
-- `ToolRegistry` ships empty — no real tools (HTTP, browser, chain RPC,
-  etc.) are registered; that's Phase 3+ adapter work
-- No API route exposes the kernel yet
+- `packages/core` (Agent OS Kernel + Phase 3 research/evidence/project/
+  campaign stores): **in-memory only** — no repository layer connects
+  any of it to `packages/database` yet; nothing from either phase is
+  persisted durably in this sandbox
+- `ToolRegistry` now has one real (declarative) tool entry
+  (`source.http_fetch`) but still no executor anywhere in the repo —
+  it cannot actually be invoked yet
+- **No real `AirdropAdapter` implementations** — every AirdropType
+  resolves to the NOT_CONFIGURED stub; building real per-type adapters
+  is Phase 4+ work
+- No API route exposes the kernel or Phase 3 research/project stores yet
 - `apps/worker`: only a placeholder heartbeat queue; real job types
+  (including anything that would back `source.http_fetch`)
   NOT_CONFIGURED
 - Rate limiting: single global limiter only, no per-route/per-auth-endpoint
   tuning yet
 
 ## Known bugs / security issues
-Two bugs were found and fixed via **live-DB verification** of
-`/auth/register` and `/auth/login` against a real Postgres instance —
-neither was caught by the original Phase 1 unit-test-only verification,
-because both are about actual transactional/constraint behavior that a
-mocked db object cannot exercise.
+### Phase 1 (fixed via live-DB verification against real Postgres)
+1. **`/auth/register` had no transaction.** Sequential unwrapped
+   inserts (`users` → `agent_identities` → `devices` →
+   `device_permissions`) could leave an orphaned, permanently
+   unrecoverable `users` row on a mid-sequence failure. **Fixed** by
+   wrapping the handler in `db.transaction(...)`.
+2. **`formatAgentLabel(1)` was hardcoded.** Every registration got the
+   literal label suffix `1`, so the second real user always hit a
+   unique-constraint `500`. **Fixed** via a Postgres sequence
+   (`agent_label_seq`, migration `0002_majestic_red_ghost.sql`).
 
-1. **`/auth/register` had no transaction.** The handler did sequential,
-   unwrapped inserts: `users` → `agent_identities` → `devices` →
-   `device_permissions`. A failure at any step after the first left an
-   orphaned `users` row with no agent identity — the account was then
-   permanently unrecoverable: login failed (`500 agent identity missing
-   for user`) and re-registration failed (`409 account already exists`),
-   with no path out. Reproduced live: registering a second real user
-   failed (see bug 2) and left exactly that orphaned row, confirmed via
-   `psql`. **Fixed** by wrapping the full handler body in
-   `db.transaction(async (tx) => { ... })` so any failure rolls back
-   everything atomically.
-2. **`formatAgentLabel(1)` was hardcoded.** Every registration passed
-   the literal `1` instead of a real per-agent sequence number.
-   `agent_identities_label_idx` is a unique index on `label`, so the
-   *second* real user to register always hit `500 duplicate key value
-   violates unique constraint "agent_identities_label_idx"`. Reproduced
-   live: user A registered fine (`AIRDROP-USER-001`), user B's
-   registration 500'd. **Fixed** by adding a Postgres sequence
-   (`agent_label_seq`, migration `0002_majestic_red_ghost.sql`) and
-   deriving the label from `nextval('agent_label_seq')` inside the same
-   transaction as fix 1 — atomic and race-safe under concurrent
-   registrations, without changing the `AIRDROP-USER-NNN` format (kept
-   because `packages/identity/src/__tests__/agentIdentity.test.ts`
-   asserts that exact format).
-
-Also fixed as part of the same live-DB pass: a malformed/missing
-`device` object on `/auth/register` or `/auth/login` (e.g. missing
-`name`/`platform`/`version`, or an invalid `type`) previously fell
-through to the DB layer and surfaced as a raw `500` with a Postgres
-constraint name leaked in the response body. Added `validateDevice()`
-input validation so this now fails fast with a clean `400`.
+Also fixed in the same pass: a malformed/missing `device` object on
+`/auth/register` or `/auth/login` previously leaked a raw Postgres
+constraint name in a `500`; `validateDevice()` now fails fast with a
+clean `400`.
 
 Regression tests: `apps/api/src/__tests__/auth.register.test.ts` (runs
-against a real Postgres test database, not mocked) covers distinct
-agent labels across two sequential registrations, that a forced
-mid-transaction failure leaves no orphaned `users` row, and that a
-malformed `device` object returns `400`.
+against a real Postgres test database, not mocked).
+
+### Phase 3 (found and fixed via unit testing, no live DB involved)
+3. **`ResearchEngine.deduplicate()` matched on `(projectId, field,
+   valueHash)` instead of `(projectId, field)`.** Two observations of
+   the same field with *different* values (e.g. conflicting TGE dates
+   from two sources) were never recognized as competing facts about
+   the same claim — each became its own claim with one piece of
+   agreeing evidence, so `detectContradiction()` never saw them
+   together and a real contradiction silently went undetected instead
+   of surfacing as `CONFLICTED`. Caught by
+   `researchEngine.test.ts` (`verify() returns CONFLICTED once
+   contradicting evidence is attached, even after being VERIFIED`),
+   which failed before the fix. **Fixed** by matching dedup on
+   `(projectId, field)` only, so differing values now correctly land as
+   competing evidence on the same claim. See `PHASE-3.md` for detail.
 
 Caveats still open:
 - Concurrent-refresh races and kernel-to-DB persistence races remain
-  unverified.
+  unverified (Phase 1/2).
 - Phase 2 was previously built once already (commit `f7db4b2`) and
   reverted (`df172d1`) with no reason recorded in that revert's commit
-  message. This phase was rebuilt from scratch rather than restoring
-  that commit; if the original revert was for a substantive reason,
-  it wasn't visible in the repository history available here.
+  message. Phase 2 was rebuilt from scratch rather than restoring that
+  commit.
+- Phase 3's evidence graph, reputation tracker, and stores are entirely
+  in-memory and untested against realistic data volumes or concurrent
+  writers.
 
 ## Migrations
 - `packages/database/drizzle/0000_tearful_rafael_vega.sql` — 13 Phase 1
@@ -105,19 +124,20 @@ Caveats still open:
   `memory_entries`, `tool_registry` tables + `agent_runs`/`events`
   column additions
 - `packages/database/drizzle/0002_majestic_red_ghost.sql` — adds
-  `agent_label_seq`, a Postgres sequence backing the numeric suffix of
-  `agent_identities.label` (see Known bugs / security issues, bug 2)
+  `agent_label_seq` (see Known bugs, bug 2)
 
-All three migrations have been applied and exercised against a real
-local Postgres instance as part of the live-DB bug-fix pass described
-above.
+No new migration this phase — Phase 3's stores have no persistence
+layer yet (see Partial / not-configured and `PHASE-3.md`).
+
+All three existing migrations have been applied and exercised against a
+real local Postgres instance as part of the Phase 1 live-DB bug-fix pass.
 
 ## API routes
 `GET /health`, `GET /readiness`, `POST /auth/register`,
 `POST /auth/login`, `POST /auth/refresh`, `POST /auth/revoke`,
 `GET /devices`, `POST /devices/transition`
 
-No kernel-backed routes exist yet.
+No kernel-backed or Phase-3-backed routes exist yet.
 
 ## Environment variables
 `NODE_ENV`, `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`,
@@ -125,30 +145,34 @@ No kernel-backed routes exist yet.
 `REFRESH_TOKEN_TTL_SECONDS`, `API_HOST`, `API_PORT`, `RATE_LIMIT_MAX`,
 `RATE_LIMIT_WINDOW_MS`, `POSTGRES_PASSWORD` (all documented in
 `.env.example`, no real secrets committed). No new env vars were needed
-for Phase 2.
+for Phase 2 or Phase 3.
 
 ## Required external integrations
-None required through Phase 2. Phase 3+ will need chain RPC providers,
-Phase 6+ will need browser automation, Phase 8+ will need
+None required through Phase 3 (research retrieval is caller-supplied in
+this phase, not a live integration). Phase 6+ will need browser
+automation for actual source retrieval; Phase 8+ will need
 Discord/X/Telegram/GitHub API credentials — all currently
 NOT_CONFIGURED, to be added explicitly (never fabricated) when those
 phases are built.
 
 ## Next-phase dependencies
-Phase 3 (Project/Research/Evidence/Campaign) consumes: `AgentOSKernel`
-(to run research agents under permission/run-limit enforcement),
-`MemoryStore` (RESEARCH_FACT / PROJECT_FACT / PROJECT_EVENT types),
-`KernelEventBus` (for research pipeline events), and `ToolRegistry`
-(to register the first real tools — HTTP fetch / source retrieval).
+A Phase 4 (per the original 10-phase plan; `PHASE-4.md` was not present
+in this repository/session) would consume: `ProjectStore` (read/update
+projects), `ResearchEngine` + `EvidenceGraph` (ingest/verify claims),
+`AirdropAdapterRegistry` (register real per-type adapters replacing the
+NOT_CONFIGURED stub), `CampaignStore` (track live campaign timelines),
+and the `source.http_fetch` tool declaration (once an executor exists).
 
 ## Exact recommended next action
 1. On a machine with Docker: `docker compose up -d`, then
-   `pnpm --filter @airdrop-os/database db:migrate` (applies both
+   `pnpm --filter @airdrop-os/database db:migrate` (applies all three
    migrations), then start the API and confirm `/readiness` reports
    `CONNECTED` for both Postgres and Redis.
 2. Manually exercise `/auth/register` → `/auth/login` →
    `/devices/transition` (promote a device to TRUSTED) → `/auth/refresh`
    once against the real database to confirm the Phase 1 flow
    end-to-end.
-3. Then hand `PHASE-3.md` to Claude, in a fresh chat pointed at this
-   repository, per the README's sequential-build instructions.
+3. `PHASE-4.md` does not exist in this repository — it will need to be
+   written (following the same format as PHASE-1/2/3.md) before the
+   next phase can be handed to a fresh Claude session per the README's
+   sequential-build instructions.
