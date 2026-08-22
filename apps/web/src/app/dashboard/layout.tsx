@@ -1,25 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/authContext";
 import { Sidebar } from "@/components/Sidebar";
 
+// No login/register pages exist, so this layout no longer gates on or
+// redirects to a sign-in flow. It still shows the session's device id
+// and a sign-out control when a session happens to be present (e.g. one
+// created directly against the API), but never blocks rendering on it.
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { session, loading, logout } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !session) router.replace("/login");
-  }, [loading, session, router]);
-
-  if (loading || !session) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-base-950">
-        <div className="font-mono text-sm text-ink-700">loading console...</div>
-      </main>
-    );
-  }
+  const { session, logout } = useAuth();
 
   return (
     <div className="flex min-h-screen bg-base-950">
@@ -27,14 +16,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1">
         <header className="flex items-center justify-between border-b border-base-700 px-6 py-3">
           <div className="font-mono text-xs text-ink-500">
-            device <span className="text-ink-300">{session.deviceId.slice(0, 8)}</span>
+            {session ? <>device <span className="text-ink-300">{session.deviceId.slice(0, 8)}</span></> : "no session"}
           </div>
-          <button
-            onClick={() => logout().then(() => router.push("/login"))}
-            className="text-xs text-ink-500 hover:text-ink-100"
-          >
-            Sign out
-          </button>
+          {session && (
+            <button onClick={() => logout()} className="text-xs text-ink-500 hover:text-ink-100">
+              Sign out
+            </button>
+          )}
         </header>
         <div className="p-6">{children}</div>
       </div>
