@@ -55,6 +55,50 @@ connection strings. Same DB reachable from PC, VPS, and phone at once.
 - `apps/web`, `apps/local-agent`, `apps/extension`, `apps/android` — scaffolded, built in later phases
 - `packages/*` — shared core/types/database/security/identity/config/ui
 
+## Frontend on Termux (`apps/web`)
+
+Status: **known limitation, documented workaround below**. Next.js's
+compiler (SWC) has no native binary published for Android/ARM64 at
+all — not "not yet installed", genuinely never published — and its
+`next dev`/`next build` startup tries to load that binary before a
+`.babelrc` fallback (already added to `apps/web`) has a chance to take
+effect. Adding `@next/swc-wasm-nodejs` as a fallback does **not** fix
+this on stock Termux Node, because Termux's Node reports
+`process.platform` in a way that skips the wasm fallback path
+entirely for this target.
+
+**Workaround: run the frontend inside a proot-distro Ubuntu chroot**,
+where Node reports as a normal `linux-arm64` and native binaries
+resolve normally (the same class of fix already applied to the backend
+for `argon2`, but for the frontend the underlying tool itself has no
+native path at all, so a chroot is required rather than a
+pure-JS swap):
+
+```bash
+pkg install -y proot-distro
+proot-distro install ubuntu
+proot-distro login ubuntu
+
+# inside the Ubuntu chroot:
+apt update && apt install -y curl git
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+npm install -g pnpm
+
+cd /root
+git clone https://github.com/mainnetwallet/Personal-Airdrop-AI-Operating-System.git
+cd Personal-Airdrop-AI-Operating-System
+pnpm install
+cd apps/web
+pnpm dev
+```
+
+The backend (`apps/api`) is unaffected and continues to run natively
+in Termux as documented above — only the frontend's dev tooling needs
+the chroot. `localhost` is shared between Termux and the proot-distro
+chroot, so the web app can still reach the API at
+`http://localhost:4000`.
+
 ## Local agent (`apps/local-agent`)
 
 Status: partially wired. `launchBrowser()` uses `puppeteer-core` against
